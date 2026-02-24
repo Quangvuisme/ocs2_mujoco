@@ -2,33 +2,15 @@
 
 A comprehensive framework for Model Predictive Control (MPC) of various robotic systems using [OCS2](https://leggedrobotics.github.io/ocs2/) and [MuJoCo](https://mujoco.org/) simulation.
 
-<table align="center">
-  <tr>
-    <td align="center">
-      <video src="doc/videos/anymal.webm" width="320" autoplay loop muted playsinline></video>
-      <br/><b>ANYmal C</b>
-    </td>
-    <td align="center">
-      <video src="doc/videos/go1.webm" width="320" autoplay loop muted playsinline></video>
-      <br/><b>Unitree Go1</b>
-    </td>
-    <td align="center">
-      <video src="doc/videos/go2.webm" width="320" autoplay loop muted playsinline></video>
-      <br/><b>Unitree Go2</b>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <video src="doc/videos/quadrotor.webm" width="320" autoplay loop muted playsinline></video>
-      <br/><b>Quadrotor NMPC</b>
-    </td>
-    <td align="center">
-      <video src="doc/videos/cartpole.webm" width="320" autoplay loop muted playsinline></video>
-      <br/><b>Cartpole Balance</b>
-    </td>
-    <td align="center"></td>
-  </tr>
-</table>
+## Demo Videos
+
+| ANYmal C | Unitree Go1 | Unitree Go2 |
+|----------|-------------|-------------|
+| ![ANYmal C demo](doc/gifs/anymal.gif) | ![Unitree Go1 demo](doc/gifs/go1.gif) | ![Unitree Go2 demo](doc/gifs/go2.gif) |
+
+| Quadrotor NMPC | Cartpole Balance |
+|----------------|------------------|
+| ![Quadrotor NMPC demo](doc/gifs/quadrotor.gif) | ![Cartpole Balance demo](doc/gifs/cartpole.gif) |
 
 ## 1. Summary
 

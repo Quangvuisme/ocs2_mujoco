@@ -1,0 +1,104 @@
+<?xml version="1.0" ?>
+<robot name="cartpole" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- 
+    CartPole URDF - matches MuJoCo XML model
+    State vector: [theta, x, theta_dot, x_dot]
+    - theta: pole angle (rad), 0=upright
+    - x: cart position (m), 0=center
+  -->
+
+  <!-- World frame -->
+  <link name="world"/>
+
+  <!-- Ground/base link for reference -->
+  <link name="base">
+    <inertial>
+      <mass value="0.0"/>
+      <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+
+  <!-- Fixed joint: world -> base -->
+  <joint name="world_base" type="fixed">
+    <parent link="world"/>
+    <child link="base"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Cart link -->
+  <link name="cart">
+    <inertial>
+      <mass value="2.0"/>
+      <!-- Inertia for box: I = m/12 * (L^2 + H^2) -->
+      <!-- For cart with dimensions 0.3 x 0.2 x 0.1 m -->
+      <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </inertial>
+    <!-- Visual -->
+    <visual>
+      <geometry>
+        <box size="0.3 0.2 0.1"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0.3 0.6 0.9 1.0"/>
+      </material>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </visual>
+    <!-- Collision -->
+    <collision>
+      <geometry>
+        <box size="0.3 0.2 0.1"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </collision>
+  </link>
+
+  <!-- Joint: base -> cart (prismatic, slides in X direction) -->
+  <joint name="slider" type="prismatic">
+    <parent link="base"/>
+    <child link="cart"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-2.0" upper="2.0" effort="5.0" velocity="10.0"/>
+    <dynamics damping="0.1" friction="0.0"/>
+  </joint>
+
+  <!-- Pole link -->
+  <link name="pole">
+    <inertial>
+      <mass value="0.2"/>
+      <!-- Inertia for rod of length 1.0 m, rotating about one end -->
+      <!-- I = (1/3) * m * L^2 -->
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.001"/>
+      <origin xyz="0 0 0.5" rpy="0 0 0"/>
+    </inertial>
+    <!-- Visual: cylinder from origin to tip -->
+    <visual>
+      <geometry>
+        <cylinder radius="0.02" length="1.0"/>
+      </geometry>
+      <material name="red">
+        <color rgba="0.9 0.3 0.3 1.0"/>
+      </material>
+      <origin xyz="0 0 0.5" rpy="0 0 0"/>
+    </visual>
+    <!-- Collision: cylinder -->
+    <collision>
+      <geometry>
+        <cylinder radius="0.02" length="1.0"/>
+      </geometry>
+      <origin xyz="0 0 0.5" rpy="0 0 0"/>
+    </collision>
+  </link>
+
+  <!-- Joint: cart -> pole (revolute, hinge about Y axis) -->
+  <joint name="hinge" type="revolute">
+    <parent link="cart"/>
+    <child link="pole"/>
+    <origin xyz="0 0 0.05" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-10.0" upper="10.0" effort="10.0" velocity="10.0"/>
+    <dynamics damping="0.01" friction="0.0"/>
+  </joint>
+
+</robot>

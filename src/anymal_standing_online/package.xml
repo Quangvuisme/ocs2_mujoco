@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>anymal_standing_online</name>
+  <version>0.0.1</version>
+  <description>ANYmal C Standing Control with OCS2 Centroidal MPC + MuJoCo</description>
+  <maintainer email="quangvd7@example.com">quangvd7</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  
+  <depend>rclcpp</depend>
+  <depend>ocs2_core</depend>
+  <depend>ocs2_ddp</depend>
+  <depend>ocs2_mpc</depend>
+  <depend>ocs2_oc</depend>
+  <depend>ocs2_sqp</depend>
+  <depend>ocs2_ipm</depend>
+  <depend>ocs2_centroidal_model</depend>
+  <depend>ocs2_pinocchio_interface</depend>
+  <depend>ocs2_robotic_tools</depend>
+  <depend>ocs2_robotic_assets</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

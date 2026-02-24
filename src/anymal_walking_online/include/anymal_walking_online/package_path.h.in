@@ -1,0 +1,11 @@
+#pragma once
+
+#include <string>
+
+namespace anymal_walking_online {
+
+inline std::string getPath() {
+    return "@CMAKE_CURRENT_SOURCE_DIR@";
+}
+
+}  // namespace anymal_walking_online

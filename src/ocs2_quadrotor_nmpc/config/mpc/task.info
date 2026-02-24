@@ -1,0 +1,173 @@
+; ================================================
+; Quadrotor Online NMPC Configuration
+; Real-time MPC control in MuJoCo simulation
+; ================================================
+
+; Quadrotor physical parameters
+QuadrotorParameters
+{
+  quadrotorMass   0.546
+  Thzz            3e-4
+  Thxxyy          2.32e-3
+  gravity         9.81
+}
+
+; Mode sequence
+subsystemsSequence
+{
+  [0]     0
+}
+
+; Template mode sequence
+templateSubsystemsSequence
+{
+  [0]     0
+}
+templateSwitchingTimes
+{
+}
+
+; DDP/iLQR settings for MPC
+ddp
+{
+  algorithm                     ILQR
+
+  nThreads                      1
+
+  maxNumIterations              3       ; Limited iterations for real-time
+  minRelCost                    1e-2
+  constraintTolerance           1e-2
+
+  displayInfo                   false
+  displayShortSummary           false
+  debugPrintRollout             false
+  checkNumericalStability       false
+
+  AbsTolODE                     1e-4
+  RelTolODE                     1e-3
+  timeStep                      5e-3
+  maxNumStepsPerSecond          10000
+  backwardPassIntegratorType    ODE45
+
+  inequalityConstraintMu        100.0
+  inequalityConstraintDelta     1.1
+
+  preComputeRiccatiTerms        true
+
+  useFeedbackPolicy             true    ; Enable feedback for MPC
+
+  strategy                      LINE_SEARCH
+  lineSearch
+  {
+    minStepLength                 0.1
+    maxStepLength                 1.0
+    hessianCorrectionStrategy     EIGENVALUE_MODIFICATION
+    hessianCorrectionMultiple     1e-2
+  }
+}
+
+; Rollout settings
+rollout
+{
+  AbsTolODE                   1e-5
+  RelTolODE                   1e-4
+  timeStep                    1e-2
+  maxNumStepsPerSecond        100000
+  checkNumericalStability     false
+}
+
+; MPC settings
+mpc
+{
+  timeHorizon                 3.0     ; [s] - longer horizon for better trajectory
+  solutionTimeWindow          1.0     ; [s] - longer window to avoid delay warning
+  coldStart                   false
+
+  debugPrint                  false
+
+  mpcDesiredFrequency         50      ; [Hz] - reduced for computation
+  mrtDesiredFrequency         200     ; [Hz]
+}
+
+; Initial state: [x, y, z, roll, pitch, yaw, vx, vy, vz, wx, wy, wz]
+initialState
+{
+  (0,0)   0.0   ; x
+  (1,0)   0.0   ; y
+  (2,0)   1.0   ; z (start hovering at 1m)
+  (3,0)   0.0   ; roll
+  (4,0)   0.0   ; pitch
+  (5,0)   0.0   ; yaw
+  (6,0)   0.0   ; vx
+  (7,0)   0.0   ; vy
+  (8,0)   0.0   ; vz
+  (9,0)   0.0   ; wx
+  (10,0)  0.0   ; wy
+  (11,0)  0.0   ; wz
+}
+
+; State weight matrix Q (tuned for real-time tracking)
+Q
+{
+  scaling 1e-1
+
+  (0,0)   10.0     ; x - position tracking
+  (1,1)   10.0     ; y
+  (2,2)   100.0     ; z - stronger altitude control
+  (3,3)   1.0      ; roll - attitude stabilization
+  (4,4)   1.0      ; pitch
+  (5,5)   0.5      ; yaw
+  (6,6)   1.0      ; vx - velocity damping
+  (7,7)   1.0      ; vy
+  (8,8)   2.0      ; vz
+  (9,9)   0.1      ; wx - angular rate damping
+  (10,10) 0.1      ; wy
+  (11,11) 0.1      ; wz
+}
+
+; Control weight matrix R
+R
+{
+  scaling 1e+1
+
+  (0,0)  0.1    ; Fz (thrust) - allow thrust variation
+  (1,1)  100.0  ; Mx (roll moment) - penalize torques heavily
+  (2,2)  100.0  ; My (pitch moment)
+  (3,3)  100.0  ; Mz (yaw moment)
+}
+
+; Final state weight matrix Qf
+Q_final
+{
+  scaling 1e-1
+
+  (0,0)   20.0     ; x
+  (1,1)   20.0     ; y
+  (2,2)   100.0     ; z
+  (3,3)   2.0      ; roll
+  (4,4)   2.0      ; pitch
+  (5,5)   1.0      ; yaw
+  (6,6)   2.0      ; vx
+  (7,7)   2.0      ; vy
+  (8,8)   4.0      ; vz
+  (9,9)   0.2      ; wx
+  (10,10) 0.2      ; wy
+  (11,11) 0.1      ; wz
+}
+
+; Target state (initial goal - can be changed interactively)
+x_final
+{
+  (0,0)   0.5   ; x - start with closer target
+  (1,0)   0.5   ; y
+  (2,0)   1.5   ; z - just 0.5m above initial
+  (3,0)   0.0   ; roll
+  (4,0)   0.0   ; pitch
+  (5,0)   0.0   ; yaw
+  (6,0)   0.0   ; vx
+  (7,0)   0.0   ; vy
+  (8,0)   0.0   ; vz
+  (9,0)   0.0   ; wx
+  (10,0)  0.0   ; wy
+  (11,0)  0.0   ; wz
+}

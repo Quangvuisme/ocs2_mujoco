@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>anymal_pinocchio</name>
+  <version>0.1.0</version>
+  <description>ANYmal MuJoCo GUI with Pinocchio calculations printed continuously</description>
+  <maintainer email="quang@example.com">quang</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  
+  <depend>rclcpp</depend>
+  <depend>ocs2_core</depend>
+  <depend>ocs2_pinocchio_interface</depend>
+  <depend>pinocchio</depend>
+  <depend>eigen</depend>
+  <depend>boost</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

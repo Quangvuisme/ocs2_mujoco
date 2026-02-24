@@ -1,0 +1,15 @@
+#pragma once
+
+#include <string>
+
+namespace anymal_pinocchio {
+
+inline std::string getPath() {
+    return "@CMAKE_CURRENT_SOURCE_DIR@";
+}
+
+inline std::string getInstallPath() {
+    return "@CMAKE_INSTALL_PREFIX@/share/@PROJECT_NAME@";
+}
+
+}  // namespace anymal_pinocchio

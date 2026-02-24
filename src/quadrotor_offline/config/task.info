@@ -1,0 +1,172 @@
+; ================================================
+; Quadrotor Offline NMPC Configuration
+; ================================================
+
+; Quadrotor physical parameters
+QuadrotorParameters
+{
+  quadrotorMass   0.546
+  Thzz            3e-4
+  Thxxyy          2.32e-3
+  gravity         9.8
+}
+
+; Mode sequence
+subsystemsSequence
+{
+  [0]     0
+}
+
+; Template mode sequence
+templateSubsystemsSequence
+{
+  [0]     0
+}
+templateSwitchingTimes
+{
+}
+
+; ILQR settings
+ddp
+{
+  algorithm                     ILQR
+
+  nThreads                      1
+
+  maxNumIterations              100
+  minRelCost                    1e-12
+  constraintTolerance           1e-3
+
+  displayInfo                   false
+  displayShortSummary           true
+  debugPrintRollout             false
+  checkNumericalStability       false
+
+  AbsTolODE                     2e-5
+  RelTolODE                     1e-3
+  timeStep                      1e-3
+  maxNumStepsPerSecond          100000
+  backwardPassIntegratorType    ODE45
+
+  inequalityConstraintMu        100.0
+  inequalityConstraintDelta     1.1
+
+  preComputeRiccatiTerms        true
+
+  useFeedbackPolicy             false
+
+  strategy                      LINE_SEARCH
+  lineSearch
+  {
+    minStepLength                 0.1
+    maxStepLength                 1.0
+    hessianCorrectionStrategy     EIGENVALUE_MODIFICATION
+    hessianCorrectionMultiple     1e-3
+  }
+}
+
+; Rollout settings
+rollout
+{
+  AbsTolODE                   2e-5
+  RelTolODE                   1e-3
+  timeStep                    1e-2
+  maxNumStepsPerSecond        100000
+  checkNumericalStability     false
+}
+
+; MPC settings
+mpc
+{
+  timeHorizon                 2.0     ; [s]
+  solutionTimeWindow          0.5     ; [s]
+  coldStart                   false
+
+  debugPrint                  false
+
+  mpcDesiredFrequency         100     ; [Hz]
+  mrtDesiredFrequency         400     ; [Hz]
+}
+
+; Initial state: [x, y, z, roll, pitch, yaw, vx, vy, vz, wx, wy, wz]
+initialState
+{
+  (0,0)   0.0   ; x
+  (1,0)   0.0   ; y
+  (2,0)   0.5   ; z (start hovering)
+  (3,0)   0.0   ; roll
+  (4,0)   0.0   ; pitch
+  (5,0)   0.0   ; yaw
+  (6,0)   0.0   ; vx
+  (7,0)   0.0   ; vy
+  (8,0)   0.0   ; vz
+  (9,0)   0.0   ; wx
+  (10,0)  0.0   ; wy
+  (11,0)  0.0   ; wz
+}
+
+; State weight matrix Q
+Q
+{
+  scaling 1e-0
+
+  (0,0)   100.0    ; x
+  (1,1)   100.0    ; y
+  (2,2)   1000.0   ; z
+  (3,3)   50.0     ; roll
+  (4,4)   50.0     ; pitch
+  (5,5)   50.0     ; yaw
+  (6,6)   10.0     ; vx
+  (7,7)   10.0     ; vy
+  (8,8)   10.0     ; vz
+  (9,9)   5.0      ; wx
+  (10,10) 5.0      ; wy
+  (11,11) 5.0      ; wz
+}
+
+; Control weight matrix R
+R
+{
+  scaling 1e+1
+
+  (0,0)  1.0    ; Fz (thrust)
+  (1,1)  50.0   ; Mx (roll moment)
+  (2,2)  50.0   ; My (pitch moment)
+  (3,3)  50.0   ; Mz (yaw moment)
+}
+
+; Final state weight matrix Qf
+Q_final
+{
+  scaling 0e-2
+
+  (0,0)   100.0    ; x
+  (1,1)   100.0    ; y
+  (2,2)   100.0    ; z
+  (3,3)   4.0      ; roll
+  (4,4)   4.0      ; pitch
+  (5,5)   0.2      ; yaw
+  (6,6)   100.0    ; vx
+  (7,7)   100.0    ; vy
+  (8,8)   100.0    ; vz
+  (9,9)   4.0      ; wx
+  (10,10) 4.0      ; wy
+  (11,11) 0.2      ; wz
+}
+
+; Target state (goal)
+x_final
+{
+  (0,0)   3.0   ; x
+  (1,0)   3.0   ; y
+  (2,0)   5.0   ; z
+  (3,0)   0.0   ; roll
+  (4,0)   0.0   ; pitch
+  (5,0)   0.0   ; yaw
+  (6,0)   0.0   ; vx
+  (7,0)   0.0   ; vy
+  (8,0)   0.0   ; vz
+  (9,0)   0.0   ; wx
+  (10,0)  0.0   ; wy
+  (11,0)  0.0   ; wz
+}

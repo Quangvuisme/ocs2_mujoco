@@ -1,0 +1,83 @@
+<mujoco model="cartpole_scene_real">
+  <compiler angle="radian" coordinate="local"/>
+  
+  <option timestep="0.001" gravity="0 0 -9.81">
+    <flag warmstart="enable"/>
+  </option>
+
+  <visual>
+    <global offwidth="1280" offheight="720"/>
+    <quality shadowsize="4096"/>
+    <map force="0.1" fogstart="3" fogend="5" zfar="30"/>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+  </visual>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1="0.2 0.2 0.2" rgb2="0.3 0.3 0.3"/>
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance="0.2"/>
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0.0 0.0 0.0" width="512" height="512"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+  </asset>
+
+  <default>
+    <geom condim="3" contype="1" conaffinity="1" friction="1 0.5 0.5"/>
+    <joint limited="true" damping="0.1"/>
+    <motor ctrllimited="true"/>
+  </default>
+
+  <worldbody>
+    <!-- Ground plane -->
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+
+    <!-- Lighting -->
+    <light directional="true" diffuse="0.8 0.8 0.8" specular="0.2 0.2 0.2" pos="0 0 5" dir="0 0 -1"/>
+    <light directional="true" diffuse="0.4 0.4 0.4" specular="0.1 0.1 0.1" pos="0 0 4" dir="0.3 0.3 -1"/>
+
+    <!-- CartPole robot -->
+    <body name="cart" pos="0 0 1.5">
+      <inertial pos="0 0 0" mass="2.0" diaginertia="0.01 0.01 0.01"/>
+      
+      <!-- Cart slider joint -->
+      <joint name="slider" type="slide" axis="1 0 0" range="-2 2" damping="0.1"/>
+      <geom name="cart_geom" type="box" size="0.15 0.1 0.05" rgba="0.3 0.6 0.9 1"/>
+      
+      <!-- Pole body -->
+      <body name="pole" pos="0 0 0.05">
+        <inertial pos="0 0 0.5" mass="0.2" diaginertia="0.001 0.001 0.0001"/>
+        
+        <!-- Pole hinge joint -->
+        <joint name="hinge" type="hinge" axis="0 1 0" limited="false" damping="0.01"/>
+        <geom name="pole_geom" type="capsule" fromto="0 0 0 0 0 1.0" size="0.02" rgba="0.9 0.3 0.3 1"/>
+        <site name="pole_tip" pos="0 0 1.0" size="0.03"/>
+      </body>
+    </body>
+
+    <!-- Visual reference marks -->
+    <body name="reference" pos="0 0 0.01">
+      <geom name="origin" type="sphere" size="0.02" rgba="0 1 0 0.5" contype="0" conaffinity="0"/>
+      <geom name="x_axis" type="cylinder" fromto="0 0 0 0.5 0 0" size="0.005" rgba="1 0 0 0.3" contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- Force actuator on cart slider -->
+    <motor name="slide_force" joint="slider" gear="1" ctrllimited="true" ctrlrange="-5 5"/>
+  </actuator>
+
+  <sensor>
+    <!-- Joint positions -->
+    <jointpos name="cart_pos" joint="slider"/>
+    <jointpos name="pole_angle" joint="hinge"/>
+    
+    <!-- Joint velocities -->
+    <jointvel name="cart_vel" joint="slider"/>
+    <jointvel name="pole_anglevel" joint="hinge"/>
+    
+    <!-- Actuator force/torque -->
+    <jointactuatorfrc name="cart_force" joint="slider"/>
+  </sensor>
+</mujoco>

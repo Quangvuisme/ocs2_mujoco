@@ -1,0 +1,11 @@
+#pragma once
+
+#include <string>
+
+namespace quadruped_nmpc {
+
+inline std::string getPath() {
+    return "@CMAKE_CURRENT_SOURCE_DIR@";
+}
+
+}  // namespace quadruped_nmpc

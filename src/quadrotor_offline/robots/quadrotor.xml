@@ -1,0 +1,82 @@
+<mujoco model="quadrotor_offline">
+  <compiler angle="radian" coordinate="local" inertiafromgeom="true"/>
+  
+  <option timestep="0.01" gravity="0 0 -9.81">
+    <flag warmstart="enable"/>
+  </option>
+
+  <visual>
+    <global offwidth="1280" offheight="960"/>
+    <quality shadowsize="4096"/>
+    <map force="0.1" fogstart="10" fogend="15"/>
+    <headlight ambient="0.6 0.6 0.6" diffuse="0.9 0.9 0.9" specular="0.4 0.4 0.4"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    
+    <!-- Quadrotor materials -->
+    <material name="body_mat" rgba="0.3 0.3 0.3 1"/>
+    <material name="rotor_mat" rgba="0.2 0.5 1 0.8"/>
+    <material name="arm_mat" rgba="1 0.2 0.2 1"/>
+    <material name="target_mat" rgba="0 1 0 0.6"/>
+    <material name="trajectory_mat" rgba="1 0.5 0 0.8"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 10" dir="0 0 -1" directional="true"/>
+    <light pos="5 5 8" dir="-0.5 -0.5 -1" directional="false" diffuse="0.5 0.5 0.5"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" friction="1.0 0.01 0.001"/>
+
+    <!-- Reference target (green sphere at goal position) -->
+    <body name="target" pos="3 3 5">
+      <geom name="target_geom" type="sphere" size="0.15" material="target_mat" 
+            contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- Quadrotor body -->
+    <body name="quadrotor" pos="0 0 0.5">
+      <!-- Main body (center) -->
+      <freejoint name="root"/>
+      
+      <!-- Core body -->
+      <geom name="core" type="box" size="0.06 0.06 0.025" material="body_mat" 
+            mass="0.4" contype="1" conaffinity="1"/>
+      
+      <!-- Inertial properties matching task.info -->
+      <inertial pos="0 0 0" mass="0.546" 
+                diaginertia="2.32e-3 2.32e-3 3e-4"/>
+      
+      <!-- Arms and rotors -->
+      <!-- Front arm (X+) -->
+      <geom name="arm_front" type="cylinder" fromto="0.07 0 0 0.20 0 0" 
+            size="0.015" material="arm_mat" mass="0.04"/>
+      <geom name="rotor_front" type="cylinder" pos="0.20 0 0.015" 
+            size="0.10 0.008" material="rotor_mat" mass="0.02"/>
+      
+      <!-- Back arm (X-) -->
+      <geom name="arm_back" type="cylinder" fromto="-0.07 0 0 -0.20 0 0" 
+            size="0.015" material="arm_mat" mass="0.04"/>
+      <geom name="rotor_back" type="cylinder" pos="-0.20 0 0.015" 
+            size="0.10 0.008" material="rotor_mat" mass="0.02"/>
+      
+      <!-- Right arm (Y+) -->
+      <geom name="arm_right" type="cylinder" fromto="0 0.07 0 0 0.20 0" 
+            size="0.015" material="arm_mat" mass="0.04"/>
+      <geom name="rotor_right" type="cylinder" pos="0 0.20 0.015" 
+            size="0.10 0.008" material="rotor_mat" mass="0.02"/>
+      
+      <!-- Left arm (Y-) -->
+      <geom name="arm_left" type="cylinder" fromto="0 -0.07 0 0 -0.20 0" 
+            size="0.015" material="arm_mat" mass="0.04"/>
+      <geom name="rotor_left" type="cylinder" pos="0 -0.20 0.015" 
+            size="0.10 0.008" material="rotor_mat" mass="0.02"/>
+      
+      <!-- Camera attached to quadrotor -->
+      <camera name="onboard" pos="0 0 0.1" euler="0 0 0" fovy="90"/>
+    </body>
+  </worldbody>
+</mujoco>

@@ -1,0 +1,12 @@
+#pragma once
+
+#include <cstddef>
+#include <string>
+
+namespace quadrotor_online {
+
+inline std::string getPath() {
+  return "@PROJECT_SOURCE_DIR@";
+}
+
+}  // namespace quadrotor_online

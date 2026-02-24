@@ -1,0 +1,138 @@
+<?xml version="1.0" ?>
+<mujoco model="quadrotor_scene_real">
+  <compiler angle="radian" coordinate="local" inertiafromgeom="false"/>
+  
+  <option timestep="0.001" gravity="0 0 -9.81">
+    <flag warmstart="enable"/>
+  </option>
+
+  <visual>
+    <global offwidth="1280" offheight="720"/>
+    <quality shadowsize="4096"/>
+    <map force="0.1" fogstart="3" fogend="5" zfar="30"/>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+  </visual>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1="0.2 0.2 0.2" rgb2="0.3 0.3 0.3"/>
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance="0.2"/>
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0.0 0.0 0.0" width="512" height="512"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+  </asset>
+
+  <default>
+    <geom condim="3" contype="1" conaffinity="1" friction="0 0 0"/>
+    <joint limited="false" damping="0"/>
+    <motor ctrllimited="false"/>
+  </default>
+
+  <worldbody>
+  
+    <!-- Ground plane -->
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+        
+    <!-- Lighting -->
+    <light directional="true" diffuse="0.8 0.8 0.8" specular="0.2 0.2 0.2" pos="0 0 5" dir="0 0 -1"/>
+    <light directional="true" diffuse="0.4 0.4 0.4" specular="0.1 0.1 0.1" pos="0 0 4" dir="0.3 0.3 -1"/>
+
+    <!-- Quadrotor body (floating body with free joint) -->
+    <body name="base" pos="0 0 0.1">
+      <!-- Free joint allows 6 DOF motion (3 translation + 3 rotation) -->
+      <freejoint name="base_joint"/>
+      
+      <!-- Inertia matching OCS2: Thxxyy=0.00232, Thzz=0.0003, mass=0.546 -->
+      <inertial mass="0.546" pos="0 0 0" diaginertia="0.00232 0.00232 0.0003"/>
+      
+      <!-- Central body -->
+      <geom type="box" size="0.05 0.05 0.02" rgba="0.2 0.2 0.2 1" mass="0.3"/>
+      
+      <!-- Arms connecting to rotors -->
+      <!-- Arm 1 (+X direction) - Front -->
+      <geom name="arm_front" type="capsule" fromto="0 0 0 0.1265 0 0" size="0.008" rgba="0.8 0.1 0.1 1" mass="0.05"/>
+      
+      <!-- Arm 2 (+Y direction) - Right -->
+      <geom name="arm_right" type="capsule" fromto="0 0 0 0 0.1265 0" size="0.008" rgba="0.1 0.8 0.1 1" mass="0.05"/>
+      
+      <!-- Arm 3 (-X direction) - Back -->
+      <geom name="arm_back" type="capsule" fromto="0 0 0 -0.1265 0 0" size="0.008" rgba="0.1 0.1 0.8 1" mass="0.05"/>
+      
+      <!-- Arm 4 (-Y direction) - Left -->
+      <geom name="arm_left" type="capsule" fromto="0 0 0 0 -0.1265 0" size="0.008" rgba="0.8 0.8 0.1 1" mass="0.05"/>
+      
+      <!-- Rotor visualizations at arm ends -->
+      <!-- Rotor 1 (Front, +X) -->
+      <body name="rotor_1" pos="0.1265 0 0">
+        <geom type="cylinder" size="0.04 0.003" rgba="0.3 0.3 0.3 0.6" mass="0.02"/>
+        <geom type="box" size="0.04 0.006 0.001" rgba="0.5 0.5 0.5 0.8" mass="0.01"/>
+        <geom type="box" size="0.006 0.04 0.001" rgba="0.5 0.5 0.5 0.8" mass="0.01"/>
+        <site name="motor1" pos="0 0 0" size="0.01"/>
+      </body>
+      
+      <!-- Rotor 2 (Right, +Y) -->
+      <body name="rotor_2" pos="0 0.1265 0">
+        <geom type="cylinder" size="0.04 0.003" rgba="0.3 0.3 0.3 0.6" mass="0.02"/>
+        <geom type="box" size="0.04 0.006 0.001" rgba="0.5 0.5 0.5 0.8" mass="0.01"/>
+        <geom type="box" size="0.006 0.04 0.001" rgba="0.5 0.5 0.5 0.8" mass="0.01"/>
+        <site name="motor2" pos="0 0 0" size="0.01"/>
+      </body>
+      
+      <!-- Rotor 3 (Back, -X) -->
+      <body name="rotor_3" pos="-0.1265 0 0">
+        <geom type="cylinder" size="0.04 0.003" rgba="0.3 0.3 0.3 0.6" mass="0.02"/>
+        <geom type="box" size="0.04 0.006 0.001" rgba="0.5 0.5 0.5 0.8" mass="0.01"/>
+        <geom type="box" size="0.006 0.04 0.001" rgba="0.5 0.5 0.5 0.8" mass="0.01"/>
+        <site name="motor3" pos="0 0 0" size="0.01"/>
+      </body>
+      
+      <!-- Rotor 4 (Left, -Y) -->
+      <body name="rotor_4" pos="0 -0.1265 0">
+        <geom type="cylinder" size="0.04 0.003" rgba="0.3 0.3 0.3 0.6" mass="0.02"/>
+        <geom type="box" size="0.04 0.006 0.001" rgba="0.5 0.5 0.5 0.8" mass="0.01"/>
+        <geom type="box" size="0.006 0.04 0.001" rgba="0.5 0.5 0.5 0.8" mass="0.01"/>
+        <site name="motor4" pos="0 0 0" size="0.01"/>
+      </body>
+      <!-- Camera body (optional visualization) -->
+      <body name="camera_body" pos="-3.0 0 1.5" euler="3.14 -2.2689 1.5708">
+        <camera name="d435i_optical_cam" mode="fixed" fovy="80"/>
+      </body>
+    </body>
+
+
+
+    <!-- Visual reference marks -->
+    <body name="reference" pos="0 0 0.01">
+      <geom name="origin" type="sphere" size="0.02" rgba="0 1 0 0.5" contype="0" conaffinity="0"/>
+      <geom name="x_axis" type="cylinder" fromto="0 0 0 0.5 0 0" size="0.005" rgba="1 0 0 0.3" contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+
+  <!-- Actuators: 4 individual motor thrusts -->
+  <actuator>
+    <!-- Motor 1: Front (+X) - Thrust in +Z direction at motor1 site -->
+    <motor name="motor1" site="motor1" gear="0 0 1 0 0 0" ctrllimited="true" ctrlrange="0 10"/>
+    
+    <!-- Motor 2: Right (+Y) - Thrust in +Z direction at motor2 site -->
+    <motor name="motor2" site="motor2" gear="0 0 1 0 0 0" ctrllimited="true" ctrlrange="0 10"/>
+    
+    <!-- Motor 3: Back (-X) - Thrust in +Z direction at motor3 site -->
+    <motor name="motor3" site="motor3" gear="0 0 1 0 0 0" ctrllimited="true" ctrlrange="0 10"/>
+    
+    <!-- Motor 4: Left (-Y) - Thrust in +Z direction at motor4 site -->
+    <motor name="motor4" site="motor4" gear="0 0 1 0 0 0" ctrllimited="true" ctrlrange="0 10"/>
+  </actuator>
+
+  <sensor>
+    <!-- Position -->
+    <framepos name="pos" objtype="body" objname="base"/>
+    <!-- Quaternion -->
+    <framequat name="quat" objtype="body" objname="base"/>
+    <!-- Linear velocity -->
+    <framelinvel name="linvel" objtype="body" objname="base"/>
+    <!-- Angular velocity -->
+    <frameangvel name="angvel" objtype="body" objname="base"/>
+  </sensor>
+</mujoco>

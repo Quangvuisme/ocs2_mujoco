@@ -12,6 +12,10 @@ A comprehensive framework for Model Predictive Control (MPC) of various robotic 
 |----------------|------------------|
 | ![Quadrotor NMPC demo](doc/gifs/quadrotor.gif) | ![Cartpole Balance demo](doc/gifs/cartpole.gif) |
 
+| Roadster Kickflip on Cold-Gas Jets (OCS2 plan + NMPC) |
+|--------------------------------------------------------|
+| ![Roadster kickflip demo](doc/gifs/roadster.gif) |
+
 ## 1. Summary
 
 This project provides a complete framework for optimal control of legged robots and aerial vehicles using Model Predictive Control (MPC). It integrates OCS2's powerful optimization algorithms with MuJoCo's high-fidelity physics simulation, enabling real-time control of complex robotic systems.
@@ -31,7 +35,7 @@ This project provides a complete framework for optimal control of legged robots 
 
 ### Key Features
 
-- **Multiple Robot Support**: ANYmal C, Unitree Go1/Go2 quadrupeds, quadrotors, cartpole
+- **Multiple Robot Support**: ANYmal C, Unitree Go1/Go2 quadrupeds, quadrotors, cartpole, a jet-powered roadster
 - **Real-time MPC**: Using OCS2 Centroidal Model and DDP/SQP solvers  
 - **Whole-Body Control**: Converts MPC outputs to joint torques via RNEA
 - **MuJoCo Simulation**: High-fidelity physics simulation with interactive GUI
@@ -86,6 +90,7 @@ This project provides a complete framework for optimal control of legged robots 
 | `ocs2_quadrotor_nmpc` | Quadrotor NMPC via UDP | Multiple targets, Joystick control |
 | `quadrotor_online` | Quadrotor with GUI | Interactive MuJoCo, Real-time MPC |
 | `ocs2_cartpole_upright` | Cartpole balance | UDP control |
+| `roadster_stunt` | Roadster kickflip on cold-gas jets | OCS2 SLQ plan + NMPC, MuJoCo GUI, GIF recording |
 
 ### Support Packages
 
@@ -409,6 +414,41 @@ Terminal 2 - Controller:
 - Swing-up and balance control
 - Real-time MPC stabilization
 - Classic control benchmark
+
+</details>
+
+### 6.7 Roadster Kickflip on Cold-Gas Jets
+
+<details>
+<summary>🚗 Click to expand Roadster stunt example</summary>
+
+A 2 t sports car drives at 18 m/s, lifts off on 12 on/off compressed-air jets, does a full barrel roll over a
+row of parked vehicles and lands on its wheels. Inspired by the Tesla Roadster demo; scene and car numbers follow
+[xkhainguyen/roadster-stunt](https://github.com/xkhainguyen/roadster-stunt), re-implemented with OCS2 + MuJoCo.
+
+**Build:**
+```bash
+colcon build --packages-up-to roadster_stunt
+source install/setup.bash
+```
+
+**Run:**
+```bash
+# Live MuJoCo window (SPACE pause, R restart, L loop, F follow camera, ESC exit)
+./install/roadster_stunt/lib/roadster_stunt/roadster_stunt_mujoco --slowmo 0.5
+
+# Headless run with a touchdown report and a CSV flight log
+./install/roadster_stunt/lib/roadster_stunt/roadster_stunt_mujoco --headless --log flight.csv
+
+# Re-record doc/gifs/roadster.gif (needs ffmpeg, uses xvfb-run without a display)
+src/roadster_stunt/scripts/make_gif.sh
+```
+
+**Features:**
+- Offline stunt plan with OCS2 SLQ (planar roll model, jet limits and clearance as soft constraints)
+- Closed-loop OCS2 NMPC (50 Hz, feedback policy at 100 Hz) tracking the plan and landing softly
+- Pitch/yaw hold, bounded least-squares allocation to 12 jets, on/off valves, limited air tank
+- Optional mid-roll gust disturbance (`config/task.info`)
 
 </details>
 colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release --symlink-install

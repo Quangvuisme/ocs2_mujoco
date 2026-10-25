@@ -1,0 +1,195 @@
+<!--
+  Roadster kickflip scene: a generic 2 t wedge sports car with 12 cold-gas (compressed air) jets,
+  driving at 18 m/s towards a row of parked vehicles that it clears with a full barrel roll.
+
+  Car geometry, thruster layout and scene dimensions are ported from
+  https://github.com/xkhainguyen/roadster-stunt (MIT License, Copyright (c) 2026 Khai Nguyen).
+  Every number is an estimate, not a Tesla figure.
+
+  Frames: world x forward (driving direction), y left, z up. Body frame: x forward, y left, z up.
+  The car's free joint is the first joint, so qpos[0:7] / qvel[0:6] are the car's pose / twist.
+-->
+<mujoco model="roadster_kickflip">
+  <compiler angle="degree" inertiafromgeom="false"/>
+  <option timestep="0.001" integrator="implicitfast" gravity="0 0 -9.81"/>
+
+  <visual>
+    <global offwidth="1920" offheight="1080"/>
+    <quality shadowsize="4096"/>
+    <headlight ambient="0.32 0.32 0.35" diffuse="0.45 0.45 0.45"/>
+    <map znear="0.05" zfar="500"/>
+  </visual>
+
+  <asset>
+    <texture name="sky" type="skybox" builtin="gradient" rgb1="0.10 0.13 0.20" rgb2="0 0 0" width="512" height="512"/>
+    <texture name="ground" type="2d" builtin="checker" rgb1="0.14 0.14 0.15" rgb2="0.17 0.17 0.18" width="512" height="512"/>
+    <material name="ground" texture="ground" texrepeat="40 40" reflectance="0.15"/>
+    <material name="paint" rgba="0.78 0.05 0.07 1" specular="0.6" shininess="0.8" reflectance="0.1"/>
+    <material name="glass" rgba="0.05 0.06 0.08 1" specular="0.8" shininess="0.9"/>
+    <material name="tire" rgba="0.08 0.08 0.09 1"/>
+    <material name="rim" rgba="0.55 0.56 0.60 1" specular="0.6"/>
+    <material name="plume" rgba="0.85 0.93 1.00 1" emission="0.9" specular="0"/>
+  </asset>
+
+  <default>
+    <default class="visual">
+      <geom contype="0" conaffinity="0"/>
+    </default>
+    <!-- cold-gas plume: glowing material, colour from the (non-default) geom rgba whose alpha follows the jet force -->
+    <default class="plume">
+      <geom type="capsule" material="plume" rgba="0.85 0.93 1.00 0" contype="0" conaffinity="0" group="2"/>
+    </default>
+    <default class="jet">
+      <site size="0.06" rgba="0.3 0.3 0.35 1"/>
+    </default>
+    <default class="suspension">
+      <joint type="slide" axis="0 0 1" stiffness="44000" damping="3750" range="-0.10 0.22" limited="true" armature="1"/>
+    </default>
+    <default class="spin">
+      <joint type="hinge" axis="0 1 0" damping="0.5" armature="0.5"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <light directional="true" pos="0 0 30" dir="0.2 0.3 -1" diffuse="0.6 0.6 0.65" castshadow="true"/>
+    <light pos="23 -15 12" dir="0 1 -0.6" diffuse="0.5 0.5 0.55" cutoff="60" castshadow="false"/>
+    <geom name="floor" type="plane" size="200 200 0.1" material="ground"/>
+
+    <!-- lane edge and the launch line at x = 0 -->
+    <geom class="visual" type="box" size="80 0.06 0.002" pos="30 -6 0.002" rgba="0.9 0.9 0.9 1"/>
+    <geom class="visual" type="box" size="80 0.06 0.002" pos="30 6 0.002" rgba="0.9 0.9 0.9 1"/>
+    <geom class="visual" type="box" size="0.15 3.0 0.002" pos="0 0 0.003" rgba="0.95 0.80 0.20 1"/>
+
+    <!-- ===================== car (2000 kg incl. a full air tank) ===================== -->
+    <body name="car" pos="-12 0 0.5528">
+      <freejoint name="car"/>
+      <inertial pos="0 0 0" mass="1900" diaginertia="842.7 3137 3561"/>
+
+      <!-- collision: chassis slab and cabin -->
+      <geom name="chassis" type="box" size="2.15 0.95 0.30" group="3"/>
+      <geom name="cabin_col" type="box" size="0.9 0.75 0.15" pos="-0.2 0 0.42" group="3"/>
+
+      <!-- visuals: wedge body from primitives -->
+      <geom class="visual" type="box" size="2.15 0.98 0.20" pos="0 0 -0.08" material="paint"/>
+      <geom class="visual" type="box" size="0.02 0.85 0.02" pos="2.16 0 0.02" rgba="1 1 1 1"/>
+      <geom class="visual" type="box" size="0.02 0.90 0.025" pos="-2.16 0 0.10" rgba="1 0.08 0.05 1"/>
+      <geom class="visual" type="box" size="0.95 0.96 0.06" pos="1.25 0 0.10" euler="0 9 0" material="paint"/>
+      <geom class="visual" type="box" size="0.75 0.80 0.12" pos="-0.25 0 0.28" material="glass"/>
+      <geom class="visual" type="box" size="0.55 0.80 0.03" pos="0.62 0 0.30" euler="0 24 0" material="glass"/>
+      <geom class="visual" type="box" size="0.70 0.82 0.03" pos="-0.25 0 0.42" material="paint"/>
+      <geom class="visual" type="box" size="0.70 0.94 0.10" pos="-1.45 0 0.18" euler="0 -6 0" material="paint"/>
+
+      <!-- 4 lift jets under the car (push body +z), 15 kN each -->
+      <site class="jet" name="lift_fl" pos="1.6 0.85 -0.3"/>
+      <site class="jet" name="lift_fr" pos="1.6 -0.85 -0.3"/>
+      <site class="jet" name="lift_rl" pos="-1.6 0.85 -0.3"/>
+      <site class="jet" name="lift_rr" pos="-1.6 -0.85 -0.3"/>
+      <geom class="plume" name="plume_lift_fl" fromto="1.6 0.85 -0.3 1.6 0.85 -1.7" size="0.13"/>
+      <geom class="plume" name="plume_lift_fr" fromto="1.6 -0.85 -0.3 1.6 -0.85 -1.7" size="0.13"/>
+      <geom class="plume" name="plume_lift_rl" fromto="-1.6 0.85 -0.3 -1.6 0.85 -1.7" size="0.13"/>
+      <geom class="plume" name="plume_lift_rr" fromto="-1.6 -0.85 -0.3 -1.6 -0.85 -1.7" size="0.13"/>
+
+      <!-- 4 roof jets (push body -z), 5 kN each -->
+      <site class="jet" name="roof_fl" pos="1.6 0.85 0.3"/>
+      <site class="jet" name="roof_fr" pos="1.6 -0.85 0.3"/>
+      <site class="jet" name="roof_rl" pos="-1.6 0.85 0.3"/>
+      <site class="jet" name="roof_rr" pos="-1.6 -0.85 0.3"/>
+      <geom class="plume" name="plume_roof_fl" fromto="1.6 0.85 0.3 1.6 0.85 1.2" size="0.09"/>
+      <geom class="plume" name="plume_roof_fr" fromto="1.6 -0.85 0.3 1.6 -0.85 1.2" size="0.09"/>
+      <geom class="plume" name="plume_roof_rl" fromto="-1.6 0.85 0.3 -1.6 0.85 1.2" size="0.09"/>
+      <geom class="plume" name="plume_roof_rr" fromto="-1.6 -0.85 0.3 -1.6 -0.85 1.2" size="0.09"/>
+
+      <!-- 4 side jets for yaw (push body +-y), 3 kN each -->
+      <site class="jet" name="side_f_pos" pos="1.8 -1 0"/>
+      <site class="jet" name="side_f_neg" pos="1.8 1 0"/>
+      <site class="jet" name="side_r_pos" pos="-1.8 -1 0"/>
+      <site class="jet" name="side_r_neg" pos="-1.8 1 0"/>
+      <geom class="plume" name="plume_side_f_pos" fromto="1.8 -1 0 1.8 -1.7 0" size="0.07"/>
+      <geom class="plume" name="plume_side_f_neg" fromto="1.8 1 0 1.8 1.7 0" size="0.07"/>
+      <geom class="plume" name="plume_side_r_pos" fromto="-1.8 -1 0 -1.8 -1.7 0" size="0.07"/>
+      <geom class="plume" name="plume_side_r_neg" fromto="-1.8 1 0 -1.8 1.7 0" size="0.07"/>
+
+      <!-- wheels on sliding suspension -->
+      <body name="susp_fl" pos="1.4 0.9 -0.29">
+        <joint class="suspension" name="susp_fl"/>
+        <inertial pos="0 0 0" mass="1" diaginertia="0.1 0.1 0.1"/>
+        <body name="wheel_fl">
+          <joint class="spin" name="spin_fl"/>
+          <inertial pos="0 0 0" mass="24" diaginertia="1.5 2.5 1.5"/>
+          <geom name="tire_fl" type="sphere" size="0.35" group="3" friction="1.0 0.005 0.0001"/>
+          <geom class="visual" type="cylinder" size="0.35 0.14" euler="90 0 0" material="tire"/>
+          <geom class="visual" type="cylinder" size="0.22 0.145" euler="90 0 0" material="rim"/>
+        </body>
+      </body>
+      <body name="susp_fr" pos="1.4 -0.9 -0.29">
+        <joint class="suspension" name="susp_fr"/>
+        <inertial pos="0 0 0" mass="1" diaginertia="0.1 0.1 0.1"/>
+        <body name="wheel_fr">
+          <joint class="spin" name="spin_fr"/>
+          <inertial pos="0 0 0" mass="24" diaginertia="1.5 2.5 1.5"/>
+          <geom name="tire_fr" type="sphere" size="0.35" group="3" friction="1.0 0.005 0.0001"/>
+          <geom class="visual" type="cylinder" size="0.35 0.14" euler="90 0 0" material="tire"/>
+          <geom class="visual" type="cylinder" size="0.22 0.145" euler="90 0 0" material="rim"/>
+        </body>
+      </body>
+      <body name="susp_rl" pos="-1.4 0.9 -0.29">
+        <joint class="suspension" name="susp_rl"/>
+        <inertial pos="0 0 0" mass="1" diaginertia="0.1 0.1 0.1"/>
+        <body name="wheel_rl">
+          <joint class="spin" name="spin_rl"/>
+          <inertial pos="0 0 0" mass="24" diaginertia="1.5 2.5 1.5"/>
+          <geom name="tire_rl" type="sphere" size="0.35" group="3" friction="1.0 0.005 0.0001"/>
+          <geom class="visual" type="cylinder" size="0.35 0.14" euler="90 0 0" material="tire"/>
+          <geom class="visual" type="cylinder" size="0.22 0.145" euler="90 0 0" material="rim"/>
+        </body>
+      </body>
+      <body name="susp_rr" pos="-1.4 -0.9 -0.29">
+        <joint class="suspension" name="susp_rr"/>
+        <inertial pos="0 0 0" mass="1" diaginertia="0.1 0.1 0.1"/>
+        <body name="wheel_rr">
+          <joint class="spin" name="spin_rr"/>
+          <inertial pos="0 0 0" mass="24" diaginertia="1.5 2.5 1.5"/>
+          <geom name="tire_rr" type="sphere" size="0.35" group="3" friction="1.0 0.005 0.0001"/>
+          <geom class="visual" type="cylinder" size="0.35 0.14" euler="90 0 0" material="tire"/>
+          <geom class="visual" type="cylinder" size="0.22 0.145" euler="90 0 0" material="rim"/>
+        </body>
+      </body>
+    </body>
+
+    <!-- ===================== row of parked vehicles, 16..30 m past the launch line ===================== -->
+    <geom name="obstacle_0" type="box" size="1.0 2.4 0.75" pos="17.4 0 0.75" rgba="0.35 0.37 0.40 1"/>
+    <geom name="obstacle_1" type="box" size="1.0 2.5 0.95" pos="20.2 0 0.95" rgba="0.15 0.32 0.62 1"/>
+    <geom name="obstacle_2" type="box" size="1.3 3.2 2.0" pos="23.0 0 2.0" rgba="0.82 0.83 0.85 1"/>
+    <geom name="obstacle_3" type="box" size="1.0 2.6 1.0" pos="25.8 0 1.0" rgba="0.25 0.26 0.28 1"/>
+    <geom name="obstacle_4" type="box" size="1.0 2.4 0.8" pos="28.6 0 0.8" rgba="0.70 0.71 0.74 1"/>
+
+    <camera name="side" pos="21 -34 4.5" xyaxes="1 0 0 0 0.05 1" fovy="45"/>
+  </worldbody>
+
+  <contact>
+    <exclude body1="car" body2="susp_fl"/>
+    <exclude body1="car" body2="wheel_fl"/>
+    <exclude body1="car" body2="susp_fr"/>
+    <exclude body1="car" body2="wheel_fr"/>
+    <exclude body1="car" body2="susp_rl"/>
+    <exclude body1="car" body2="wheel_rl"/>
+    <exclude body1="car" body2="susp_rr"/>
+    <exclude body1="car" body2="wheel_rr"/>
+  </contact>
+
+  <!-- Jet forces [N] along the body axes at each nozzle site. Actuator order is used by the controller. -->
+  <actuator>
+    <general name="lift_fl" site="lift_fl" gear="0 0 1 0 0 0" ctrllimited="true" ctrlrange="0 15000"/>
+    <general name="lift_fr" site="lift_fr" gear="0 0 1 0 0 0" ctrllimited="true" ctrlrange="0 15000"/>
+    <general name="lift_rl" site="lift_rl" gear="0 0 1 0 0 0" ctrllimited="true" ctrlrange="0 15000"/>
+    <general name="lift_rr" site="lift_rr" gear="0 0 1 0 0 0" ctrllimited="true" ctrlrange="0 15000"/>
+    <general name="roof_fl" site="roof_fl" gear="0 0 -1 0 0 0" ctrllimited="true" ctrlrange="0 5000"/>
+    <general name="roof_fr" site="roof_fr" gear="0 0 -1 0 0 0" ctrllimited="true" ctrlrange="0 5000"/>
+    <general name="roof_rl" site="roof_rl" gear="0 0 -1 0 0 0" ctrllimited="true" ctrlrange="0 5000"/>
+    <general name="roof_rr" site="roof_rr" gear="0 0 -1 0 0 0" ctrllimited="true" ctrlrange="0 5000"/>
+    <general name="side_f_pos" site="side_f_pos" gear="0 1 0 0 0 0" ctrllimited="true" ctrlrange="0 3000"/>
+    <general name="side_f_neg" site="side_f_neg" gear="0 -1 0 0 0 0" ctrllimited="true" ctrlrange="0 3000"/>
+    <general name="side_r_pos" site="side_r_pos" gear="0 1 0 0 0 0" ctrllimited="true" ctrlrange="0 3000"/>
+    <general name="side_r_neg" site="side_r_neg" gear="0 -1 0 0 0 0" ctrllimited="true" ctrlrange="0 3000"/>
+  </actuator>
+</mujoco>

@@ -1,0 +1,242 @@
+; ================================================
+; Roadster kickflip with cold-gas jets
+; OCS2 SLQ stunt plan + OCS2 NMPC flight control in MuJoCo
+;
+; Car, jet and scene numbers follow github.com/xkhainguyen/roadster-stunt.
+; Every number is an estimate, not a Tesla figure.
+; ================================================
+
+; Car and jets
+roadster
+{
+  mass            2000.0    ; [kg] incl. a full air tank
+  rollInertia     887.1     ; [kg m^2] solid 4.3 x 2.0 x 1.15 m box
+  pitchInertia    3302.1    ; [kg m^2]
+  yawInertia      3748.3    ; [kg m^2]
+  gravity         9.81      ; [m/s^2]
+  jetY            0.85      ; lateral offset of the lift and roof jets [m]
+  liftMax         15000.0   ; per lift jet (4 under the car) [N]
+  roofMax         5000.0    ; per roof jet (4 on the roof) [N]
+  sideMax         3000.0    ; per side jet (4, yaw only) [N]
+  impulseBudget   180000.0  ; [N s] about 260 kg of air at a cold-gas Isp of 70 s
+  rideHeight      0.5328    ; body height at rest on the wheels [m]
+  touchHeight     0.64      ; body height when the relaxed tires touch the ground [m]
+}
+
+; Kickflip scene and the shape of the hand-designed guide for the plan
+stunt
+{
+  launchSpeed     18.0      ; run-up speed [m/s]
+  runup           12.0      ; driven on the road before the launch line [m]
+  rowStart        16.0      ; the parked row starts this far past the launch line [m]
+  rowLength       14.0      ; [m]
+  rowHeight       4.0       ; tallest vehicle (a semi) [m]
+  rowMargin       1.5       ; clearance zone extends this far before/after the row [m]
+  clearanceRadius 1.2       ; half-diagonal of the car cross-section, rounded up [m]
+  flightTime      2.6       ; planned launch-to-touchdown time [s]
+  apexMargin      0.6       ; guide cruise height above the clearance height [m]
+  rollStartTime   0.55      ; guide roll starts [s after launch]
+  rollEndTime     1.95      ; guide roll ends [s after launch]
+  flareHeight     0.15      ; the plan ends this far above touchdown height ... [m]
+  landingSinkRate 0.4       ; ... sinking at this rate; the NMPC keeps it down to the ground [m/s]
+}
+
+; Soft constraints (relaxed log-barrier penalties)
+constraints
+{
+  jetLimits                 ; 0 <= jet group force <= max [kN]
+  {
+    mu            0.05
+    delta         0.2
+  }
+  clearance                 ; z >= clearance height over the row [m]
+  {
+    mu            2.0
+    delta         0.05
+  }
+}
+
+; Rollout settings
+rollout
+{
+  AbsTolODE                   1e-5
+  RelTolODE                   1e-3
+  timeStep                    1e-2
+  maxNumStepsPerSecond        100000
+  checkNumericalStability     false
+}
+
+; ------------------------------------------------
+; Stage 1: offline plan of the whole flight (SLQ)
+;   state [y, z, vy, vz, roll, rollRate], input [lift_L, lift_R, roof_L, roof_R] (kN)
+; ------------------------------------------------
+plan
+{
+  jetLimitScale   0.9       ; plan with 90 % of the jet force, the rest is NMPC authority
+
+  ddp
+  {
+    algorithm                     SLQ
+    nThreads                      1
+    maxNumIterations              300
+    minRelCost                    1e-7
+    constraintTolerance           1e-3
+    displayInfo                   false
+    displayShortSummary           true
+    debugPrintRollout             false
+    checkNumericalStability       false
+    AbsTolODE                     1e-5
+    RelTolODE                     1e-3
+    timeStep                      1e-2
+    maxNumStepsPerSecond          100000
+    backwardPassIntegratorType    ODE45
+    preComputeRiccatiTerms        true
+    useFeedbackPolicy             false
+    strategy                      LINE_SEARCH
+    lineSearch
+    {
+      minStepLength                 1e-3
+      maxStepLength                 1.0
+      hessianCorrectionStrategy     DIAGONAL_SHIFT
+      hessianCorrectionMultiple     1e-5
+    }
+  }
+
+  ; loose tracking of the guide: the clearance barrier and the jet limits shape the plan
+  Q
+  {
+    scaling 1e+0
+    (0,0)   50.0    ; y
+    (1,1)   2.0     ; z
+    (2,2)   1.0     ; vy
+    (3,3)   0.1     ; vz
+    (4,4)   20.0    ; roll
+    (5,5)   0.1     ; roll rate
+  }
+
+  ; air usage
+  R
+  {
+    scaling 1e-2
+    (0,0)   1.0     ; lift_L
+    (1,1)   1.0     ; lift_R
+    (2,2)   1.0     ; roof_L
+    (3,3)   1.0     ; roof_R
+  }
+
+  ; end centered, level, just above the ground, sinking slowly, not spinning
+  Q_final
+  {
+    scaling 1e+0
+    (0,0)   2000.0  ; y
+    (1,1)   2000.0  ; z
+    (2,2)   500.0   ; vy
+    (3,3)   500.0   ; vz
+    (4,4)   2000.0  ; roll
+    (5,5)   500.0   ; roll rate
+  }
+}
+
+; ------------------------------------------------
+; Stage 2: closed-loop NMPC in MuJoCo, tracking the plan (SLQ, receding horizon)
+; ------------------------------------------------
+nmpc
+{
+  jetLimitScale   1.0
+
+  ddp
+  {
+    algorithm                     SLQ
+    nThreads                      1
+    maxNumIterations              5
+    minRelCost                    1e-4
+    constraintTolerance           1e-3
+    displayInfo                   false
+    displayShortSummary           false
+    debugPrintRollout             false
+    checkNumericalStability       false
+    AbsTolODE                     1e-5
+    RelTolODE                     1e-3
+    timeStep                      1e-2
+    maxNumStepsPerSecond          100000
+    backwardPassIntegratorType    ODE45
+    preComputeRiccatiTerms        true
+    useFeedbackPolicy             true
+    strategy                      LINE_SEARCH
+    lineSearch
+    {
+      minStepLength                 1e-2
+      maxStepLength                 1.0
+      hessianCorrectionStrategy     DIAGONAL_SHIFT
+      hessianCorrectionMultiple     1e-5
+    }
+  }
+
+  Q
+  {
+    scaling 1e+0
+    (0,0)   200.0   ; y
+    (1,1)   400.0   ; z
+    (2,2)   20.0    ; vy
+    (3,3)   40.0    ; vz
+    (4,4)   400.0   ; roll
+    (5,5)   10.0    ; roll rate
+  }
+
+  R
+  {
+    scaling 1e-1
+    (0,0)   1.0     ; lift_L
+    (1,1)   1.0     ; lift_R
+    (2,2)   1.0     ; roof_L
+    (3,3)   1.0     ; roof_R
+  }
+
+  Q_final
+  {
+    scaling 1e+0
+    (0,0)   1000.0  ; y
+    (1,1)   2000.0  ; z
+    (2,2)   100.0   ; vy
+    (3,3)   200.0   ; vz
+    (4,4)   2000.0  ; roll
+    (5,5)   50.0    ; roll rate
+  }
+}
+
+; MPC settings
+mpc
+{
+  timeHorizon                 1.0     ; [s]
+  solutionTimeWindow          -1      ; [s]
+  coldStart                   false
+  debugPrint                  false
+  mpcDesiredFrequency         50      ; [Hz] (solved synchronously in simulation time)
+  mrtDesiredFrequency         100     ; [Hz] jet control rate
+}
+
+; Jets below the NMPC
+lowLevel
+{
+  pitchNaturalFrequency   6.0     ; [rad/s] pitch hold
+  yawNaturalFrequency     4.0     ; [rad/s] yaw hold
+  onOffValves             true    ; on/off cold-gas valves (sigma-delta) instead of throttled jets
+}
+
+; Simulation
+simulation
+{
+  settleTime      0.5     ; on the wheels before the run-up [s]
+  rolloutTime     1.5     ; braking on the wheels after touchdown [s]
+  brakeDamping    1500.0  ; wheel spin damping once landed [N m s]
+
+  ; a sideways gust and roll kick while the car is nearly upside down (set enable true to try it)
+  gust
+  {
+    enable        false
+    start         1.2     ; [s after launch], roll is about 160 deg
+    duration      0.15    ; [s]
+    forceY        4000.0  ; world frame [N]
+    torqueX       6000.0  ; body frame [N m]
+  }
+}

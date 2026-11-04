@@ -27,6 +27,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ******************************************************************************/
 
+#include <exception>
+
 #include <ocs2_core/thread_support/SetThreadPriority.h>
 #include <ocs2_core/thread_support/ThreadPool.h>
 
@@ -99,12 +101,28 @@ namespace ocs2 {
         }
 
         // Execute one instance in this thread.
+        // If any instance throws, all helpers are still waited for before the first exception is rethrown:
+        // otherwise they would keep running on the caller's data after this function returned.
+        std::exception_ptr firstException;
         const auto workerId = static_cast<int>(numThreads()); // threadpool workers use ID 0 -> nThreads - 1
-        taskFunction(workerId);
+        try {
+            taskFunction(workerId);
+        } catch (...) {
+            firstException = std::current_exception();
+        }
 
         // Wait for helpers to finish.
         for (auto &&fut: futures) {
-            fut.get();
+            try {
+                fut.get();
+            } catch (...) {
+                if (!firstException) {
+                    firstException = std::current_exception();
+                }
+            }
+        }
+        if (firstException) {
+            std::rethrow_exception(firstException);
         }
     }
 } // namespace ocs2

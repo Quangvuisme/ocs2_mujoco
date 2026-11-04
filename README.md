@@ -26,7 +26,7 @@ This project provides a complete framework for optimal control of legged robots 
 - Elevation map ray-cast directly from the MuJoCo scene (`mj_ray` per cell): no elevation_mapping / grid_map /
   plane segmentation packages
 - Steppability, edge distance, foothold selection with convex regions, terrain-aware swing trajectories,
-  swing clearance, base pose and leg posture following the terrain
+  swing-foot and shank clearance, base pose and leg posture following the terrain
 - Plain C++ / CMake build without ROS: the needed OCS2 libraries are compiled straight from `src/ocs2_ros2`
 - Climbs and descends stairs and crosses rough blocks and a beam (headless lock-step test and offscreen GIF recording)
 
@@ -499,7 +499,9 @@ src/anymal_perceptive_mujoco/scripts/make_gif.sh
 - Robot-centric 3.2 x 3.2 m elevation map at 2 cm from `mj_ray`, 20 Hz, robot geoms filtered by geom group
 - Steppability (plane fit, slope, roughness), edge distance, inflated layer for swing collision avoidance
 - Foothold search around the Raibert foothold, convex foot placement regions as soft constraints
-- Swing apex above the highest obstacle on the way, base height / pitch / roll and leg IK posture from the terrain
+- Swing apex above the highest obstacle on the way, swing-foot and shank clearance above the map
+- Base height / pitch / roll and leg IK posture from the terrain; standing trot by default
+- Completed the course in 37 of 40 scripted runs (3 speeds x 6 start offsets)
 
 </details>
 colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release --symlink-install

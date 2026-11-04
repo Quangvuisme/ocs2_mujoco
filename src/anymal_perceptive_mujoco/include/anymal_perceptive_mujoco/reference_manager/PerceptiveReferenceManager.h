@@ -17,6 +17,7 @@ struct PerceptionSettings {
   // base reference
   int numTargetNodes = 11;      // target trajectory is resampled on this many nodes over the horizon
   double basePitchGain = 1.0;   // fraction of the terrain slope the base follows
+  double basePitchGainDown = 1.0;  // same, when the slope goes down in the walking direction (nose down)
   double baseRollGain = 1.0;
   double maxBasePitch = 0.35;   // [rad]
   double maxBaseRoll = 0.20;    // [rad]
@@ -28,6 +29,12 @@ struct PerceptionSettings {
   double swingConstraintLiftOffMargin = 0.03;  // [s]
   double swingConstraintTouchDownMargin = 0.06;  // [s]
   // penalties
+  bool enableFootPlacement = true;
+  bool enableSwingClearance = true;
+  bool enableShankClearance = true;       // keep the lower legs off step noses / risers
+  double shankRadius = 0.03;              // [m] shank cylinder radius + margin
+  double shankClearanceMu = 1e-2;
+  double shankClearanceDelta = 5e-3;
   double footPlacementMu = 1e-2;
   double footPlacementDelta = 5e-3;
   double swingClearanceMu = 1e-2;

@@ -38,6 +38,8 @@ ControllerSettings loadControllerSettings(const std::string& file, const std::st
   ocs2::loadData::loadPtreeValue(pt, s.wbcJointKp, p + "wbcJointKp", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.wbcJointKd, p + "wbcJointKd", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.commandHorizon, p + "commandHorizon", verbose);
+  ocs2::loadData::loadPtreeValue(pt, s.maxCommandLead, p + "maxCommandLead", verbose);
+  ocs2::loadData::loadPtreeValue(pt, s.maxCommandYawLead, p + "maxCommandYawLead", verbose);
   return s;
 }
 
@@ -127,6 +129,11 @@ void PerceptiveController::preStep(const mjModel* m, mjData* d) {
     if (!mpcActive_) {
       startMpc(t, x, state);
     }
+    if (state == FSMState::WALKING) {
+      updateWalkAnchor(t, x, walk);
+    } else {
+      walkAnchorValid_ = false;
+    }
     referenceManager().setCommandTrajectories(buildCommand(t, x, state, walk, stand));
 
     const auto& info = interface_->getCentroidalModelInfo();
@@ -167,6 +174,10 @@ void PerceptiveController::startMpc(double time, const ocs2::vector_t& state, FS
   }
   if (fsmState == FSMState::STANDING) {
     standPose_ << state(6), state(7), state(9);
+  }
+  walkAnchorValid_ = false;
+  if (fsmState == FSMState::WALKING) {
+    updateWalkAnchor(time, state, walk);
   }
   const auto command = buildCommand(time, state, fsmState, walk, stand);
   referenceManager().setCommandTrajectories(command);
@@ -216,6 +227,27 @@ bool PerceptiveController::advanceMpc() {
   return true;
 }
 
+void PerceptiveController::updateWalkAnchor(double time, const ocs2::vector_t& state, const WalkingTarget& walk) {
+  const Eigen::Vector3d measured(state(6), state(7), state(9));
+  if (!walkAnchorValid_ || settings_.maxCommandLead <= 0.0) {
+    walkAnchor_ = measured;
+    walkAnchorTime_ = time;
+    walkAnchorValid_ = true;
+    return;
+  }
+  const double dt = std::clamp(time - walkAnchorTime_, 0.0, 0.1);
+  walkAnchorTime_ = time;
+  walkAnchor_.z() += walk.yaw_rate * dt;
+  walkAnchor_.head<2>() += yawRotation(walkAnchor_.z()) * Eigen::Vector2d(walk.vx, walk.vy) * dt;
+  // position feedback: do not let the command run away from (or fall behind) the robot
+  const Eigen::Vector2d lead = walkAnchor_.head<2>() - measured.head<2>();
+  if (lead.norm() > settings_.maxCommandLead) {
+    walkAnchor_.head<2>() = measured.head<2>() + settings_.maxCommandLead * lead.normalized();
+  }
+  walkAnchor_.z() = measured.z() + std::clamp(walkAnchor_.z() - measured.z(), -settings_.maxCommandYawLead,
+                                              settings_.maxCommandYawLead);
+}
+
 ocs2::TargetTrajectories PerceptiveController::buildCommand(double time, const ocs2::vector_t& state, FSMState fsmState,
                                                             const WalkingTarget& walk, const StandingTarget& stand) const {
   const auto& info = interface_->getCentroidalModelInfo();
@@ -235,12 +267,12 @@ ocs2::TargetTrajectories PerceptiveController::buildCommand(double time, const o
     return ocs2::TargetTrajectories({time}, {x}, {zeroInput});
   }
 
-  // walking: integrate the velocity command (heading frame) from the measured pose
+  // walking: integrate the velocity command (heading frame) from the walking anchor
   constexpr int kNumNodes = 6;
   const double dt = settings_.commandHorizon / (kNumNodes - 1);
   const Eigen::Vector2d vLocal(walk.vx, walk.vy);
-  Eigen::Vector2d position(state(6), state(7));
-  double yaw = state(9);
+  Eigen::Vector2d position = walkAnchorValid_ ? Eigen::Vector2d(walkAnchor_.head<2>()) : Eigen::Vector2d(state(6), state(7));
+  double yaw = walkAnchorValid_ ? walkAnchor_.z() : state(9);
   ocs2::TargetTrajectories command;
   for (int k = 0; k < kNumNodes; ++k) {
     if (k > 0) {

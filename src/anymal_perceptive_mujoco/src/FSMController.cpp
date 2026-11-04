@@ -119,11 +119,12 @@ void FSMController::onStateEnter(FSMState state) {
         case FSMState::WALKING:
             mpcEnabled_ = true;
             walkingTarget_.reset();
-            walkingTarget_.gait = GaitType::TROT;  // Default to trot gait for walking
+            // standing trot (trot with short 4-leg stance phases) is the most robust gait on stairs
+            walkingTarget_.gait = GaitType::STANDING_TROT;
             if (gaitChangeCallback_) {
-                gaitChangeCallback_(GaitType::TROT);
+                gaitChangeCallback_(GaitType::STANDING_TROT);
             }
-            std::cout << "[FSM] Entered WALKING - MPC control active (TROT)" << std::endl;
+            std::cout << "[FSM] Entered WALKING - MPC control active (STANDING_TROT)" << std::endl;
             break;
             
         case FSMState::RECOVERY:

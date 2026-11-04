@@ -24,6 +24,8 @@ struct ControllerSettings {
   double wbcJointKp = 500.0;        // acceleration-level joint PD of the RNEA whole-body control
   double wbcJointKd = 50.0;
   double commandHorizon = 1.0;      // [s] length of the velocity command trajectory
+  double maxCommandLead = 0.10;     // [m] the integrated walking command may lead / lag the base by at most this
+  double maxCommandYawLead = 0.20;  // [rad]
 };
 
 ControllerSettings loadControllerSettings(const std::string& file, const std::string& prefix, bool verbose);
@@ -80,6 +82,8 @@ class PerceptiveController {
  private:
   void startMpc(double time, const ocs2::vector_t& state, FSMState fsmState);
   void stopMpc();
+  /** Integrates the walking velocity command, kept within maxCommandLead of the measured pose. */
+  void updateWalkAnchor(double time, const ocs2::vector_t& state, const WalkingTarget& walk);
   ocs2::TargetTrajectories buildCommand(double time, const ocs2::vector_t& state, FSMState fsmState,
                                         const WalkingTarget& walk, const StandingTarget& stand) const;
   ocs2::vector_t wholeBodyTorques(const ocs2::vector_t& desiredState, const ocs2::vector_t& desiredInput,
@@ -103,6 +107,11 @@ class PerceptiveController {
 
   // standing hold pose (x, y, yaw) captured when entering STANDING
   Eigen::Vector3d standPose_ = Eigen::Vector3d::Zero();
+
+  // integrated walking command (x, y, yaw); the command trajectory starts here
+  Eigen::Vector3d walkAnchor_ = Eigen::Vector3d::Zero();
+  double walkAnchorTime_ = 0.0;
+  bool walkAnchorValid_ = false;
 
   // PD stand-up interpolation
   ocs2::vector_t standUpStart_;

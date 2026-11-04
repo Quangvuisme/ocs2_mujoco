@@ -225,7 +225,9 @@ ocs2::TargetTrajectories PerceptiveReferenceManager::liftCommandOntoTerrain(ocs2
     const Eigen::Vector3d plane = M.ldlt().solve(r);
     const double heightAboveTerrain = x(8);
     x(8) = plane(0) + heightAboveTerrain;
-    x(10) = std::clamp(-std::atan(plane(1)) * settings_.basePitchGain, -settings_.maxBasePitch, settings_.maxBasePitch);
+    const double slopePitch = -std::atan(plane(1));  // > 0: terrain goes down ahead (nose down)
+    const double pitchGain = slopePitch > 0.0 ? settings_.basePitchGainDown : settings_.basePitchGain;
+    x(10) = std::clamp(slopePitch * pitchGain, -settings_.maxBasePitch, settings_.maxBasePitch);
     x(11) = std::clamp(std::atan(plane(2)) * settings_.baseRollGain, -settings_.maxBaseRoll, settings_.maxBaseRoll);
 
     // posture reference consistent with the commanded height and the terrain under every hip
@@ -364,6 +366,8 @@ PerceptionSettings loadPerceptionSettings(const std::string& file, const std::st
   const std::string p = prefix + ".";
   ocs2::loadData::loadPtreeValue(pt, s.numTargetNodes, p + "numTargetNodes", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.basePitchGain, p + "basePitchGain", verbose);
+  s.basePitchGainDown = s.basePitchGain;
+  ocs2::loadData::loadPtreeValue(pt, s.basePitchGainDown, p + "basePitchGainDown", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.baseRollGain, p + "baseRollGain", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.maxBasePitch, p + "maxBasePitch", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.maxBaseRoll, p + "maxBaseRoll", verbose);
@@ -372,6 +376,12 @@ PerceptionSettings loadPerceptionSettings(const std::string& file, const std::st
   ocs2::loadData::loadPtreeValue(pt, s.swingClearance, p + "swingClearance", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.swingConstraintLiftOffMargin, p + "swingConstraintLiftOffMargin", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.swingConstraintTouchDownMargin, p + "swingConstraintTouchDownMargin", verbose);
+  ocs2::loadData::loadPtreeValue(pt, s.enableFootPlacement, p + "enableFootPlacement", verbose);
+  ocs2::loadData::loadPtreeValue(pt, s.enableSwingClearance, p + "enableSwingClearance", verbose);
+  ocs2::loadData::loadPtreeValue(pt, s.enableShankClearance, p + "enableShankClearance", verbose);
+  ocs2::loadData::loadPtreeValue(pt, s.shankRadius, p + "shankRadius", verbose);
+  ocs2::loadData::loadPtreeValue(pt, s.shankClearanceMu, p + "shankClearanceMu", verbose);
+  ocs2::loadData::loadPtreeValue(pt, s.shankClearanceDelta, p + "shankClearanceDelta", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.footPlacementMu, p + "footPlacementMu", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.footPlacementDelta, p + "footPlacementDelta", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.swingClearanceMu, p + "swingClearanceMu", verbose);

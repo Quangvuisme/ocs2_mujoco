@@ -15,7 +15,7 @@
  *   --duration S      simulated time [s]               (default 45)
  *   --vx V            forward speed command [m/s]      (default 0.3)
  *   --goal-x X        stop and stand once the base passes x = X; success criterion
- *   --gait NAME       gait from config/command/gait.info (default trot)
+ *   --gait NAME       gait from config/command/gait.info (default standing_trot)
  *   --log FILE.csv    base trajectory log
  *   --record FILE     render to FILE (.gif or .mp4) with --width/--height/--fps/--scale/--playback
  *   --no-map          do not draw the elevation map
@@ -23,6 +23,8 @@
  *   --task FILE       use another task.info
  *   --base-height H   base height above the terrain [m] (default: FSM default 0.575 standing / 0.50 walking)
  *   --walk-start T    time of the switch from STANDING to WALKING [s] (default 3.2)
+ *   --start-y Y       initial lateral position [m] (default 0)
+ *   --report-hits     print every collision of a leg / the body (not a foot) with the terrain
  */
 
 #include <pinocchio/fwd.hpp>  // must come before Eigen / OCS2 headers that pull in pinocchio
@@ -66,7 +68,7 @@ struct Options {
   double duration = 45.0;
   double vx = 0.3;
   double goalX = -1.0;
-  std::string gait = "trot";
+  std::string gait = "standing_trot";
   std::string logFile;
   std::string record;
   int width = 960;
@@ -80,13 +82,15 @@ struct Options {
   std::string taskFile;   // overrides config/mpc/task.info
   double baseHeight = -1.0;  // base height above the terrain [m] (< 0: FSM default)
   double walkStart = 3.2; // [s] scripted switch STANDING -> WALKING
+  double startY = 0.0;    // [m] initial lateral position
+  bool reportHits = false;  // print every leg/body-terrain collision
 };
 
 void printUsage() {
   std::cout << "Usage: anymal_perceptive_mujoco [scene.xml] [--headless] [--duration S] [--vx V] [--goal-x X]\n"
                "                                [--gait NAME] [--log FILE.csv] [--record FILE.gif|mp4]\n"
                "                                [--width W] [--height H] [--fps F] [--scale W] [--playback X] [--no-map] [--map-stride N]\n"
-               "                                [--blind] [--task task.info] [--base-height H] [--walk-start T]\n";
+               "                                [--blind] [--task task.info] [--base-height H] [--walk-start T] [--start-y Y] [--report-hits]\n";
 }
 
 bool parseOptions(int argc, char** argv, Options& o) {
@@ -131,6 +135,10 @@ bool parseOptions(int argc, char** argv, Options& o) {
       o.blind = true;
     } else if (a == "--base-height") {
       o.baseHeight = std::stod(next("--base-height"));
+    } else if (a == "--report-hits") {
+      o.reportHits = true;
+    } else if (a == "--start-y") {
+      o.startY = std::stod(next("--start-y"));
     } else if (a == "--walk-start") {
       o.walkStart = std::stod(next("--walk-start"));
     } else if (a == "--task") {
@@ -147,11 +155,39 @@ bool parseOptions(int argc, char** argv, Options& o) {
   return true;
 }
 
-/** Robot standing pose at the origin, slightly above the ground. */
-void setInitialPose(const mjModel* m, mjData* d, PerceptiveController& controller) {
+/** Robot standing pose at (0, y), slightly above the ground. */
+void setInitialPose(const mjModel* m, mjData* d, PerceptiveController& controller, double y = 0.0) {
   mj_resetData(m, d);
-  controller.bridge().setPose(d, Eigen::Vector3d(0.0, 0.0, 0.62), 0.0, controller.defaultJointPositions());
+  controller.bridge().setPose(d, Eigen::Vector3d(0.0, y, 0.62), 0.0, controller.defaultJointPositions());
   mj_forward(m, d);
+}
+
+/**
+ * True for a contact between a robot geom that is not a foot and a world (terrain) geom. Contacts of the
+ * shank closer than 6 cm to the foot sphere are grazes of the foot itself (soft contacts let the foot sink)
+ * and are not counted.
+ */
+bool isBodyTerrainContact(const mjModel* m, const mjData* d, const mjContact& c, int robotRoot, const char** robotBody) {
+  for (int k = 0; k < 2; ++k) {
+    const int g = c.geom[k];
+    const int other = c.geom[1 - k];
+    const int body = m->geom_bodyid[g];
+    if (m->body_rootid[body] != robotRoot || m->geom_bodyid[other] != 0 || m->geom_type[g] == mjGEOM_SPHERE) {
+      continue;
+    }
+    for (int f = 0; f < m->ngeom; ++f) {  // foot sphere on the same body
+      if (m->geom_bodyid[f] == body && m->geom_type[f] == mjGEOM_SPHERE) {
+        const double dx = c.pos[0] - d->geom_xpos[3 * f], dy = c.pos[1] - d->geom_xpos[3 * f + 1],
+                     dz = c.pos[2] - d->geom_xpos[3 * f + 2];
+        if (dx * dx + dy * dy + dz * dz < 0.06 * 0.06) {
+          return false;
+        }
+      }
+    }
+    *robotBody = mj_id2name(m, mjOBJ_BODY, body);
+    return true;
+  }
+  return false;
 }
 
 /** Height of the base above the terrain under it. */
@@ -279,7 +315,7 @@ int runHeadless(const Options& o, mjModel* m, mjData* d, PerceptiveController& c
   const double mapPeriod = 1.0 / mapper.config().updateRate;
   const double fsmPeriod = 0.01;
 
-  setInitialPose(m, d, controller);
+  setInitialPose(m, d, controller, o.startY);
   TerrainVisualizer visualizer;
   visualizer.options().showMap = o.showMap;
   visualizer.options().mapStride = o.mapStride;
@@ -315,6 +351,11 @@ int runHeadless(const Options& o, mjModel* m, mjData* d, PerceptiveController& c
   bool fell = false;
   double maxX = 0.0, solveTimeSum = 0.0, solveTimeMax = 0.0, mapTimeSum = 0.0;
   int numSolves = 0, numMaps = 0;
+  const int robotRoot = m->body_rootid[mj_name2id(m, mjOBJ_BODY, "base")];
+  int bodyCollisionSteps = 0;
+  double firstCollisionTime = -1.0;
+  std::string firstCollisionBody;
+  bool wasColliding = false;
   std::shared_ptr<const TerrainMap> latestMap;  // ground truth for monitoring, also in --blind runs
   const auto wallStart = std::chrono::steady_clock::now();
 
@@ -381,7 +422,7 @@ int runHeadless(const Options& o, mjModel* m, mjData* d, PerceptiveController& c
       const Eigen::Vector3d zyxNow = controller.bridge().baseEulerZyx(d);
       controller.withFsm([&](FSMController& f) {
         auto& w = f.getWalkingTargetMutable();
-        w.vy = std::clamp(-0.5 * base.y(), -0.15, 0.15);
+        w.vy = std::clamp(-0.5 * (base.y() - o.startY), -0.15, 0.15);
         w.yaw_rate = std::clamp(-1.0 * zyxNow(0), -0.3, 0.3);
         return 0;
       });
@@ -424,6 +465,28 @@ int runHeadless(const Options& o, mjModel* m, mjData* d, PerceptiveController& c
     mj_step(m, d);
 
     // ---- monitoring ----
+    bool colliding = false;
+    for (int c = 0; c < d->ncon; ++c) {
+      const char* body = nullptr;
+      if (isBodyTerrainContact(m, d, d->contact[c], robotRoot, &body)) {
+        if (firstCollisionTime < 0.0) {
+          firstCollisionTime = d->time;
+          firstCollisionBody = body != nullptr ? body : "?";
+        }
+        if (o.reportHits && !wasColliding) {
+          const auto& con = d->contact[c];
+          const int robotGeom = m->body_rootid[m->geom_bodyid[con.geom[0]]] == robotRoot ? con.geom[0] : con.geom[1];
+          std::cout << "[HIT] t=" << std::setprecision(3) << d->time << " " << (body != nullptr ? body : "?") << " geom#"
+                    << robotGeom << " (type " << m->geom_type[robotGeom] << ", size " << m->geom_size[3 * robotGeom] << ")"
+                    << " at ("
+                    << con.pos[0] << ", " << con.pos[1] << ", " << con.pos[2] << ")\n";
+        }
+        colliding = true;
+        ++bodyCollisionSteps;
+        break;
+      }
+    }
+    wasColliding = colliding;
     const Eigen::Vector3d zyx = controller.bridge().baseEulerZyx(d);
     const double clearance = heightAboveTerrain(base, latestMap);
     if (controller.isMpcActive() && (clearance < 0.25 || std::abs(zyx(1)) > 0.8 || std::abs(zyx(2)) > 0.8)) {
@@ -471,6 +534,9 @@ int runHeadless(const Options& o, mjModel* m, mjData* d, PerceptiveController& c
             << "  MPC solves       : " << numSolves << "  avg " << (numSolves ? 1e3 * solveTimeSum / numSolves : 0.0)
             << " ms  max " << 1e3 * solveTimeMax << " ms\n"
             << "  map updates      : " << numMaps << "  avg " << (numMaps ? 1e3 * mapTimeSum / numMaps : 0.0) << " ms\n"
+            << "  leg/body hits    : " << bodyCollisionSteps * dt << " s of contact"
+            << (firstCollisionTime >= 0.0 ? " (first: " + firstCollisionBody + " at t=" + std::to_string(firstCollisionTime) + ")" : "")
+            << "\n"
             << "  fell             : " << (fell ? "YES" : "no") << "\n"
             << "  result           : " << (!fell && reached ? "SUCCESS" : "FAILURE") << "\n"
             << "=================================================\n";
@@ -710,7 +776,7 @@ int runGui(const Options& o, mjModel* m, mjData* d, PerceptiveController& contro
             << "    1 / A   PASSIVE\n"
             << "    2 / B   PD stand-up\n"
             << "    3 / X   STANDING (MPC)\n"
-            << "    4 / Y   WALKING  (MPC, trot)\n"
+            << "    4 / Y   WALKING  (MPC, standing trot)\n"
             << "    W/S A/D forward / lateral velocity, J/L yaw rate\n"
             << "    G / RB  next gait,  -/= height,  M map display\n"
             << "  MuJoCo window: Space pause, Backspace reset, Esc quit\n"

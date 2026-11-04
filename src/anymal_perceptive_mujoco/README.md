@@ -24,7 +24,8 @@ footholds and their foot placement regions.*
                         4. swing z splines: lift-off / touch-down heights + obstacle apex
                                         │
                                         ▼
- OCS2 centroidal NMPC (SLQ, 50 Hz) ── soft constraints: friction cone, foot placement region, swing clearance
+ OCS2 centroidal NMPC (SLQ, 50 Hz) ── soft constraints: friction cone, foot placement region, swing clearance,
+                                        │                  shank clearance
                                         │
                                         ▼
  RNEA whole-body torques (1 kHz) ──▶ MuJoCo
@@ -36,15 +37,19 @@ footholds and their foot placement regions.*
 | Terrain map | `terrain/TerrainMap` | Hole filling, smoothing, local plane fit for steppability (slope + roughness), chamfer distance to the nearest edge, inflated layer for swing clearance, bilinear queries with gradients |
 | Foothold planner | `terrain/FootholdPlanner` | Searches the steppable cells near the Raibert foothold, scoring distance to it, distance to edges and hysteresis. Builds an 8-gon region in the tangent plane |
 | Reference manager | `reference_manager/PerceptiveReferenceManager` | Terrain-lifted base trajectory, IK posture, footholds and swing heights. Hands the map snapshot to the constraints |
-| Constraints | `constraint/TerrainConstraints` | `FootPlacementConstraint`: `A p_foot + b >= 0` on future stance feet. `FootClearanceConstraint`: `p_z >= h_inflated(p_xy) + margin` in mid-swing |
+| Constraints | `constraint/TerrainConstraints` | `FootPlacementConstraint`: `A p_foot + b >= 0` on future stance feet. `FootClearanceConstraint`: `p_z >= h_inflated(p_xy) + margin` in mid-swing. `ShankClearanceConstraint`: two points on every shank (30 % and 60 % of the way to the knee) stay above the inflated map, so the lower legs do not scrape step noses and risers |
 | Swing planner | `foot_planner/SwingTrajectoryPlanner` | Cubic z splines: apex above `max(lift-off, touch-down, highest obstacle on the way)` |
 | OCS2 problem | `PerceptiveLeggedInterface` | Centroidal (SRBD) dynamics, tracking cost, contact constraints and the perceptive terms |
-| Controller | `controller/PerceptiveController`, `MujocoAnymalBridge` | FSM, velocity commands, MPC/MRT, RNEA + PD torques. MuJoCo and Pinocchio joints are matched by name |
+| Controller | `controller/PerceptiveController`, `MujocoAnymalBridge` | FSM, velocity commands (integrated, kept within 10 cm of the base so the robot cannot run away downhill), MPC/MRT, RNEA + PD torques. MuJoCo and Pinocchio joints are matched by name |
 | Visualisation | `visualization/TerrainVisualizer` | Map, footholds and base reference drawn as MuJoCo decoration geoms (GUI and recorder) |
 
 `cmake/Ocs2Standalone.cmake` compiles the needed OCS2 libraries (core, oc, mpc, ddp, qp_solver,
 robotic_tools, pinocchio_interface, centroidal_model) straight from `src/ocs2_ros2`. The upstream
 CMakeLists are ament packages, so it does not use them.
+
+One fix in the vendored OCS2 came with this package: `ThreadPool::runParallel` now waits for all helper
+threads before rethrowing an exception. Before, a failed solve left helpers running on the solver's data,
+which crashed the next solve.
 
 ## Build
 
@@ -116,7 +121,7 @@ src/anymal_perceptive_mujoco/scripts/make_gif.sh
 | `1` / A | PASSIVE |
 | `2` / B | PD stand-up |
 | `3` / X | STANDING (MPC, stance) |
-| `4` / Y | WALKING (MPC, trot) |
+| `4` / Y | WALKING (MPC, standing trot) |
 | `W` `S` / `A` `D` | forward / lateral velocity |
 | `J` `L` | yaw rate |
 | `G` / RB | next gait |
@@ -125,26 +130,30 @@ src/anymal_perceptive_mujoco/scripts/make_gif.sh
 | `Q` | emergency stop |
 
 Headless options: `--duration S`, `--vx V`, `--goal-x X`, `--gait NAME`, `--base-height H`, `--walk-start T`,
-`--log FILE.csv`, `--blind`, `--task FILE`, `--record FILE.gif|mp4` with `--width --height --fps --scale
---playback --map-stride`, `--no-map`.
+`--start-y Y`, `--log FILE.csv`, `--blind`, `--task FILE`, `--report-hits` (print every leg/body collision with the
+terrain), `--record FILE.gif|mp4` with `--width --height --fps --scale --playback --map-stride`, `--no-map`.
+The report at the end gives the distance reached, MPC/map timing, the time the legs or body touched the terrain
+(feet excluded) and whether the robot fell.
 
 ## Results (headless, lock-step, `scene_terrain.xml`)
 
-Measured with the shipped configuration. Goal: x = 8.3 m, past the beam. These runs went three at a time
-on a 4-core cloud VM, so a single run on your machine will solve faster.
+The shipped configuration (standing trot, shank clearance on) was run over the whole course (goal x = 8.3 m,
+past the beam). Each run used one of 3 speeds (0.2, 0.3 and 0.4 m/s) and one of 6 start offsets across the course
+(y = 0, ±0.05/0.15, ±0.3 m). Runs are not bit-identical: OCS2's parallel line search picks its step from whichever
+thread finishes first, so repeated runs of the same variant can differ.
 
-| Run | Result | Goal reached at | MPC solve avg / max |
-|-----|--------|-----------------|---------------------|
-| vx = 0.2 m/s | course completed | 58.2 s | 9.8 / 60 ms |
-| vx = 0.3 m/s | course completed | 41.1 s | 10.8 / 24 ms |
-| vx = 0.4 m/s | course completed | 46.7 s | 10.3 / 41 ms |
-| `--base-height 0.55`, vx = 0.2 / 0.3 / 0.4 m/s | course completed (all three) | | 9.4 - 10.4 ms avg |
-| `--blind` (MPC assumes flat ground), vx = 0.3 m/s | **stuck at the first step** (x = 1.37 m) | | 7.2 ms avg |
-| `scene_flat.xml`, vx = 0.4 m/s | ok | | 7.6 ms avg |
+| Configuration | Runs | Course completed |
+|---------------|------|------------------|
+| shipped: standing trot + shank clearance | 40 | **37 (92 %)**: every failure came at the end of the stairs down or the first rough blocks |
+| plain trot + shank clearance (`--gait trot`) | 18 | 13 (72 %) |
+| trot without shank clearance | 9 | 6 |
+| `--blind` (the MPC assumes flat ground) | 1 | 0: stuck at the first step, x = 1.24 m |
+| `scene_flat.xml`, 0.4 m/s | 1 | 1 |
 
-None of the perceptive runs had a failed solve. Run alone, the elevation map update (161 x 161 rays plus
-post-processing, 2 threads) takes about 6 ms on the flat scene and 13-20 ms on the terrain course (75 terrain
-geoms); with three runs sharing the CPU it takes 20-28 ms.
+Timing on a 4-core cloud VM, one run at a time: MPC solve 7.4 ms on average (32 ms max) at 50 Hz, and the
+elevation map update 18 ms at 20 Hz (161 x 161 rays plus post-processing on 2 threads; about 6 ms on the flat
+scene). The course takes about 32 s at 0.3 m/s. With the CppAD code already generated, a headless run of the
+course (36 s simulated) takes about 28 s of wall time.
 
 ## Configuration (`config/mpc/task.info`)
 
@@ -154,7 +163,8 @@ geoms); with three runs sharing the CPU it takes 20-28 ms.
   parameters, and `foothold` (search radius, edge distances, region size, Raibert feedback).
 * `swing_trajectory_config`: lift-off/touch-down velocity, swing height above the highest obstacle.
 * `model_settings.recompileLibrariesCppAd`: generates the CppAD libraries in `/tmp/anymal_perceptive_mujoco`
-  (about 15 s on the first run). Set it to `false` to reuse them on later runs.
+  (about 30 s on the first run). Set it to `false` to reuse them on later runs.
+* `controller`: PD stand-up, whole-body PD gains, `maxCommandLead` (position feedback on the velocity command).
 
 To add your own terrain, put geoms in group 0 or 1 of any MuJoCo scene that includes `anymal_c.xml`.
 `scripts/generate_terrain.py` regenerates the default course.
@@ -162,8 +172,10 @@ To add your own terrain, put geoms in group 0 or 1 of any MuJoCo scene that incl
 ## Notes and limitations
 
 * State estimation is perfect (taken from the simulator), and the map is noise-free geometry from the scene.
-* The gait timing is fixed (trot, 0.35 s per swing). Obstacles wider than about one step length (~0.2 m at
-  0.3 m/s), such as a deep beam, call for steps the gait cannot make.
+* The gait timing is fixed (standing trot: 0.30 s swing + 0.05 s four-leg stance). Obstacles wider than about one
+  step length (~0.2 m at 0.3 m/s), such as a deep beam, call for steps the gait cannot make.
+* Stair descents are the weak spot. In the rare failures the robot gains speed going down (up to about 2x the
+  command), the SLQ solve fails a few times in a row, and the robot sits down at the bottom of the stairs.
 * DDP does not enforce hard inequalities, so the friction cone, foot placement and swing clearance are relaxed
   barriers. If a solve fails, the controller restarts the solver and the robot keeps the last policy.
 * While trotting, the base settles a few cm above the commanded height: the swing legs and the simple RNEA

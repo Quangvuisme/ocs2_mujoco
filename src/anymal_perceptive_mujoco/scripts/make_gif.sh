@@ -15,10 +15,14 @@ trap 'rm -rf "$tmp"' EXIT
 # 960x540 MP4 at 2.5x playback, then a 480 px / 8 fps GIF without dithering (keeps the file small)
 args=(--headless --vx 0.3 --goal-x 8.3 --duration 60 --record "$tmp/run.mp4"
       --width 960 --height 540 --fps 10 --scale 960 --playback 2.5 --map-stride 3)
+status=0
 if [ -z "${DISPLAY:-}" ]; then
-  xvfb-run -a -s "-screen 0 1280x720x24" "$exe" "${args[@]}"
+  xvfb-run -a -s "-screen 0 1280x720x24" "$exe" "${args[@]}" || status=$?
 else
-  "$exe" "${args[@]}"
+  "$exe" "${args[@]}" || status=$?
+fi
+if [ "$status" -ne 0 ]; then
+  echo "WARNING: the recorded run did not reach the goal (exit code $status); the GIF shows it anyway" >&2
 fi
 
 ffmpeg -loglevel error -y -i "$tmp/run.mp4" \

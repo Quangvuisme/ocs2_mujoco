@@ -59,6 +59,7 @@ perception
 {
   numTargetNodes                11     ; base reference nodes over the horizon
   basePitchGain                 1.0    ; base pitch / roll follow the terrain plane under the feet
+  basePitchGainDown             1.0    ; pitch gain going down (0.6 made stair descents fail more often)
   baseRollGain                  1.0
   maxBasePitch                  0.35   ; [rad]
   maxBaseRoll                   0.20   ; [rad]
@@ -74,6 +75,10 @@ perception
   footPlacementDelta            5e-3   ; delta 1e-3 makes the SLQ Riccati ODE stiff when a region is violated
   swingClearanceMu              1e-2   ; relaxed barrier of the swing clearance
   swingClearanceDelta           5e-3
+  enableShankClearance          true   ; keep 2 points on every shank (30% / 60% to the knee) above the map
+  shankRadius                   0.03   ; [m] shank cylinder radius (1.75 cm) + margin
+  shankClearanceMu              1e-2
+  shankClearanceDelta           5e-3
 
   foothold
   {
@@ -100,6 +105,8 @@ controller
   wbcJointKp                    500.0  ; acceleration-level joint PD of the RNEA whole-body control
   wbcJointKd                    50.0
   commandHorizon                1.0    ; [s]
+  maxCommandLead                0.10   ; [m] integrated walking command stays within this of the base (0: no position feedback)
+  maxCommandYawLead             0.20   ; [rad]
 }
 
 ; DDP settings

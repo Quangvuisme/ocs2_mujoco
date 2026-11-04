@@ -133,7 +133,7 @@ void PerceptiveLeggedInterface::setupOptimalControlProblem(const std::string& ta
         footName + "_normalVelocity", std::make_unique<NormalVelocityConstraintCppAd>(*referenceManagerPtr_, eeKinematics, i));
 
     // perception: stance foot inside its foothold region
-    problemPtr_->stateSoftConstraintPtr->add(
+    if (ps.enableFootPlacement) problemPtr_->stateSoftConstraintPtr->add(
         footName + "_footPlacement",
         std::make_unique<ocs2::StateSoftConstraint>(
             std::make_unique<FootPlacementConstraint>(*referenceManagerPtr_, eeKinematics, i,
@@ -141,8 +141,24 @@ void PerceptiveLeggedInterface::setupOptimalControlProblem(const std::string& ta
             std::make_unique<ocs2::RelaxedBarrierPenalty>(
                 ocs2::RelaxedBarrierPenalty::Config(ps.footPlacementMu, ps.footPlacementDelta))));
 
+    // perception: lower leg (shank) above the terrain, kinematics of {knee, foot}
+    if (ps.enableShankClearance) {
+      const std::string kneeName = footName.substr(0, footName.find('_')) + "_SHANK";
+      ocs2::PinocchioEndEffectorKinematicsCppAd kneeFootKinematics(
+          *pinocchioInterfacePtr_, pinocchioMappingCppAd, {kneeName, footName}, centroidalModelInfo_.stateDim,
+          centroidalModelInfo_.inputDim, velocityUpdateCallback, footName + "_shank", modelSettings_.modelFolderCppAd,
+          modelSettings_.recompileLibrariesCppAd, modelSettings_.verboseCppAd);
+      problemPtr_->stateSoftConstraintPtr->add(
+          footName + "_shankClearance",
+          std::make_unique<ocs2::StateSoftConstraint>(
+              std::make_unique<ShankClearanceConstraint>(*referenceManagerPtr_, kneeFootKinematics,
+                                                         std::vector<double>{0.3, 0.6}, ps.shankRadius),
+              std::make_unique<ocs2::RelaxedBarrierPenalty>(
+                  ocs2::RelaxedBarrierPenalty::Config(ps.shankClearanceMu, ps.shankClearanceDelta))));
+    }
+
     // perception: swing foot above the terrain
-    problemPtr_->stateSoftConstraintPtr->add(
+    if (ps.enableSwingClearance) problemPtr_->stateSoftConstraintPtr->add(
         footName + "_swingClearance",
         std::make_unique<ocs2::StateSoftConstraint>(
             std::make_unique<FootClearanceConstraint>(*referenceManagerPtr_, eeKinematics, i),

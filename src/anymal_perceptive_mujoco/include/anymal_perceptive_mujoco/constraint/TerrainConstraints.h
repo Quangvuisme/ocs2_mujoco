@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include <ocs2_core/constraint/StateConstraint.h>
 #include <ocs2_robotic_tools/end_effector/EndEffectorKinematics.h>
@@ -63,6 +64,34 @@ class FootClearanceConstraint final : public ocs2::StateConstraint {
   const PerceptiveReferenceManager* referenceManagerPtr_;
   std::unique_ptr<ocs2::EndEffectorKinematics<ocs2::scalar_t>> endEffectorKinematicsPtr_;
   const size_t contactPointIndex_;
+};
+
+/**
+ * Keeps points on the shank (between the foot and the knee) above the inflated elevation map:
+ *     p_z - h_inflated(p_x, p_y) - radius >= 0,   p = foot + s (knee - foot),  s in `fractions`
+ * Stops the lower legs from scraping step noses and risers. The kinematics must provide two frames:
+ * the knee (index 0) and the foot (index 1). Meant to be wrapped in a StateSoftConstraint.
+ */
+class ShankClearanceConstraint final : public ocs2::StateConstraint {
+ public:
+  ShankClearanceConstraint(const PerceptiveReferenceManager& referenceManager,
+                           const ocs2::EndEffectorKinematics<ocs2::scalar_t>& kneeFootKinematics, std::vector<double> fractions,
+                           double radius);
+  ~ShankClearanceConstraint() override = default;
+  ShankClearanceConstraint* clone() const override { return new ShankClearanceConstraint(*this); }
+
+  size_t getNumConstraints(ocs2::scalar_t /*time*/) const override { return fractions_.size(); }
+  ocs2::vector_t getValue(ocs2::scalar_t time, const ocs2::vector_t& state, const ocs2::PreComputation& preComp) const override;
+  ocs2::VectorFunctionLinearApproximation getLinearApproximation(ocs2::scalar_t time, const ocs2::vector_t& state,
+                                                                 const ocs2::PreComputation& preComp) const override;
+
+ private:
+  ShankClearanceConstraint(const ShankClearanceConstraint& rhs);
+
+  const PerceptiveReferenceManager* referenceManagerPtr_;
+  std::unique_ptr<ocs2::EndEffectorKinematics<ocs2::scalar_t>> kinematicsPtr_;
+  const std::vector<double> fractions_;
+  const double radius_;
 };
 
 }  // namespace anymal_perceptive

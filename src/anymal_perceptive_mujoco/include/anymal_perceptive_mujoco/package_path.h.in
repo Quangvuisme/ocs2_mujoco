@@ -1,0 +1,10 @@
+#pragma once
+
+#include <string>
+
+namespace anymal_perceptive {
+
+/** Source directory of the package (config/, robots/). */
+inline std::string getPackagePath() { return "@CMAKE_CURRENT_SOURCE_DIR@"; }
+
+}  // namespace anymal_perceptive

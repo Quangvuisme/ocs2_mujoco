@@ -12,13 +12,23 @@ A comprehensive framework for Model Predictive Control (MPC) of various robotic 
 |----------------|------------------|
 | ![Quadrotor NMPC demo](doc/gifs/quadrotor.gif) | ![Cartpole Balance demo](doc/gifs/cartpole.gif) |
 
-| Roadster Kickflip on Cold-Gas Jets (OCS2 plan + NMPC) |
-|--------------------------------------------------------|
-| ![Roadster kickflip demo](doc/gifs/roadster.gif) |
+| Roadster Kickflip on Cold-Gas Jets (OCS2 plan + NMPC) | ANYmal C Perceptive NMPC (elevation map from MuJoCo, no ROS) |
+|--------------------------------------------------------|--------------------------------------------------------------|
+| ![Roadster kickflip demo](doc/gifs/roadster.gif) | ![ANYmal C perceptive NMPC demo](doc/gifs/anymal_perceptive.gif) |
 
 ## 1. Summary
 
 This project provides a complete framework for optimal control of legged robots and aerial vehicles using Model Predictive Control (MPC). It integrates OCS2's powerful optimization algorithms with MuJoCo's high-fidelity physics simulation, enabling real-time control of complex robotic systems.
+
+### What's New (2026.11)
+
+**Perceptive NMPC for ANYmal C (`anymal_perceptive_mujoco`)**
+- Elevation map ray-cast directly from the MuJoCo scene (`mj_ray` per cell): no elevation_mapping / grid_map /
+  plane segmentation packages
+- Steppability, edge distance, foothold selection with convex regions, terrain-aware swing trajectories,
+  swing-foot and shank clearance, base pose and leg posture following the terrain
+- Plain C++ / CMake build without ROS: the needed OCS2 libraries are compiled straight from `src/ocs2_ros2`
+- Climbs and descends stairs and crosses rough blocks and a beam (headless lock-step test and offscreen GIF recording)
 
 ### What's New (2026.01)
 
@@ -91,6 +101,7 @@ This project provides a complete framework for optimal control of legged robots 
 | `quadrotor_online` | Quadrotor with GUI | Interactive MuJoCo, Real-time MPC |
 | `ocs2_cartpole_upright` | Cartpole balance | UDP control |
 | `roadster_stunt` | Roadster kickflip on cold-gas jets | OCS2 SLQ plan + NMPC, MuJoCo GUI, GIF recording |
+| `anymal_perceptive_mujoco` | ANYmal C perceptive NMPC (no ROS) | Elevation map from MuJoCo, footholds, stairs, plain CMake |
 
 ### Support Packages
 
@@ -449,6 +460,48 @@ src/roadster_stunt/scripts/make_gif.sh
 - Closed-loop OCS2 NMPC (50 Hz, feedback policy at 100 Hz) tracking the plan and landing softly
 - Pitch/yaw hold, bounded least-squares allocation to 12 jets, on/off valves, limited air tank
 - Optional mid-roll gust disturbance (`config/task.info`)
+
+</details>
+
+### 6.8 Perceptive NMPC on Terrain (ANYmal C, no ROS)
+
+<details>
+<summary>🪜 Click to expand perceptive locomotion example</summary>
+
+The MPC sees the terrain through an elevation map that is ray-cast straight from the MuJoCo scene, with no ROS
+and no perception packages. It picks footholds on steppable cells, lifts the swing feet over steps and obstacles, and
+lets the base follow the terrain. Plain CMake build; details in
+[src/anymal_perceptive_mujoco/README.md](src/anymal_perceptive_mujoco/README.md).
+
+**Build (no ROS):**
+```bash
+pip install pin cmeel-urdfdom-headers          # pinocchio 3 (or robotpkg / any pinocchio 3 install)
+export MUJOCO_DIR=/path/to/mujoco-3.3.0         # MuJoCo release directory
+src/anymal_perceptive_mujoco/scripts/build.sh   # -> build/anymal_perceptive/
+```
+
+**Run:**
+```bash
+# MuJoCo GUI on the stairs / rough-terrain course (keys 2 -> 3 -> 4, then W/A/S/D in the terminal)
+build/anymal_perceptive/anymal_perceptive_mujoco
+
+# Deterministic headless run over the whole course (exit code 0 when the goal is reached)
+build/anymal_perceptive/anymal_perceptive_mujoco --headless --vx 0.3 --goal-x 8.3
+
+# The same run with a blind MPC (flat-ground assumption), for comparison
+build/anymal_perceptive/anymal_perceptive_mujoco --headless --vx 0.3 --goal-x 8.3 --blind
+
+# Re-record doc/gifs/anymal_perceptive.gif (needs ffmpeg, uses xvfb-run without a display)
+src/anymal_perceptive_mujoco/scripts/make_gif.sh
+```
+
+**Features:**
+- Robot-centric 3.2 x 3.2 m elevation map at 2 cm from `mj_ray`, 20 Hz, robot geoms filtered by geom group
+- Steppability (plane fit, slope, roughness), edge distance, inflated layer for swing collision avoidance
+- Foothold search around the Raibert foothold, convex foot placement regions as soft constraints
+- Swing apex above the highest obstacle on the way, swing-foot and shank clearance above the map
+- Base height / pitch / roll and leg IK posture from the terrain; standing trot by default
+- Completed the course in 37 of 40 scripted runs (3 speeds x 6 start offsets)
 
 </details>
 colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release --symlink-install

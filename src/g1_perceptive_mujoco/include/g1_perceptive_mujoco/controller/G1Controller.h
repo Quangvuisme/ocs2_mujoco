@@ -83,6 +83,12 @@ class G1Controller {
   const ControllerSettings& settings() const { return settings_; }
   const ocs2::vector_t& defaultJointPositions() const { return defaultJoints_; }
 
+  /**
+   * Contact point positions [toe L, toe R, heel L, heel R] of the current MPC solution at `time` (for traces).
+   * Call from the physics thread. Empty before the first policy.
+   */
+  std::vector<Eigen::Vector3d> predictedContactPositions(double time);
+
   /** Timing of the last MPC solve [s]. */
   double lastSolveDuration() const { return lastSolveDuration_.load(); }
 

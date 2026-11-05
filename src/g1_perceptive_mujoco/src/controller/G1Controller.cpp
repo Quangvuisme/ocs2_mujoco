@@ -6,12 +6,15 @@
 #include <cmath>
 #include <iostream>
 
+#include <pinocchio/algorithm/frames.hpp>
+#include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/multibody/model.hpp>
 
 #include <boost/property_tree/info_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
 #include <ocs2_centroidal_model/AccessHelperFunctions.h>
+#include <ocs2_core/misc/LinearInterpolation.h>
 #include <ocs2_core/misc/LoadData.h>
 
 #include "g1_perceptive_mujoco/common/utils.h"
@@ -183,6 +186,33 @@ void G1Controller::preStep(const mjModel* m, mjData* d) {
   }
 
   bridge_->setJointTorques(m, d, tau);
+}
+
+std::vector<Eigen::Vector3d> G1Controller::predictedContactPositions(double time) {
+  std::vector<Eigen::Vector3d> positions;
+  if (!mpcActive_ || !mrt_->initialPolicyReceived()) {
+    return positions;
+  }
+  ocs2::PrimalSolution policy;
+  try {
+    policy = mrt_->getPolicy();  // throws until the MRT has swapped in its first policy
+  } catch (const std::exception&) {
+    return positions;
+  }
+  if (policy.timeTrajectory_.empty()) {
+    return positions;
+  }
+  const ocs2::vector_t state = ocs2::LinearInterpolation::interpolate(time, policy.timeTrajectory_, policy.stateTrajectory_);
+  const auto& info = interface_->getCentroidalModelInfo();
+  ocs2::PinocchioInterface pinocchio = interface_->getPinocchioInterface();
+  const auto& model = pinocchio.getModel();
+  auto& data = pinocchio.getData();
+  pinocchio::forwardKinematics(model, data, ocs2::centroidal_model::getGeneralizedCoordinates(state, info));
+  pinocchio::updateFramePlacements(model, data);
+  for (const auto id : info.endEffectorFrameIndices) {
+    positions.push_back(data.oMf[id].translation());
+  }
+  return positions;
 }
 
 void G1Controller::startMpc(double time, const ocs2::vector_t& state, FSMState fsmState) {

@@ -110,6 +110,37 @@ Runs are close to deterministic: repeated runs of the same variant gave the same
 Timing on a 4-core cloud VM, one run at a time: MPC 7.5 ms on average (20 ms max) at 100 Hz, elevation map
 6.5 ms at 20 Hz. The course takes about 41 s simulated, 38 s wall time.
 
+## Parkour course (work in progress)
+
+`scripts/generate_parkour.py` builds a harder course on top of a pit floor 0.5 m below the start level
+(`robots/g1/scene_parkour.xml`, goal x = 21.37 m; `--level hard` writes a harder variant with 0.15 m stairs,
+0.20 - 0.30 m gaps, an 18 deg ramp, 0.15 m hurdles and a 0.20 m step). Sections: 0.12 m stairs, gaps of 0.10 / 0.15 /
+0.20 m, stepping stones, a 12 deg ramp, 0.10 m hurdles, a 0.15 m step. `--sections a,b -o file.xml` writes single
+sections for testing.
+
+```bash
+build/g1_perceptive/g1_perceptive_mujoco src/g1_perceptive_mujoco/robots/g1/scene_parkour.xml \
+  --task src/g1_perceptive_mujoco/config/mpc/task_parkour.info --headless --vx 0.25 --goal-x 21.37 --trace run.csv
+```
+
+`config/mpc/task_parkour.info` = `task.info` plus the options added for it (all off by default in `task.info`):
+
+| Option | What it does |
+|--------|--------------|
+| `elevation_mapper.processing.gapFillRadius` | Morphological closing of the smooth layer: narrow pits do not pull the pelvis reference and the leg posture down |
+| `foothold.maxStepHeight` | Rejects footholds far above / below the foot's previous stance (pit floors) |
+| `foothold.expandedSearchFactor` | Second, wider search when the nominal sole is over a gap wider than the search radius |
+| `swing_trajectory_config.stepDownApexPhase` | Apex later in the swing when stepping down, so the heel does not drop onto the nose it leaves |
+| `perception.clearanceGradientScale` | Scale of the sideways map gradient in the clearance constraints (1: as before) |
+
+`--trace FILE.csv` logs, every 10 ms, the pelvis, the toe / heel positions, the next planned footholds, the toe / heel
+positions the MPC predicts 0.2 s ahead, joint angles and torques.
+
+Per-section results with `task_parkour.info` (3 speeds x 3 lateral offsets, 9 runs each, normal level): gaps 9/9,
+stairs 7/9, single 0.15 m step 6/9; ramp, hurdles and stepping stones pass at 0.25 m/s. The full course is not yet
+reliable. Step-downs are the weak spot: the hip / knee torques saturate and the swing foot lands short, both effects of
+the single-rigid-body model (the G1 legs are 45 % of the mass) and of the RNEA + PD whole-body control.
+
 ## Notes and limitations
 
 * Perfect state estimation, noise-free map from the scene geometry.

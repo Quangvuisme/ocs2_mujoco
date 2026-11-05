@@ -2,6 +2,7 @@
 
 #include <map>
 #include <string>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -18,6 +19,8 @@ struct FootholdPlannerConfig {
   double edgeWeight = 4.0;            // weight of the edge penalty (relative to squared distance to nominal)
   double previousWeight = 0.5;        // weight on staying close to the foothold chosen at the last MPC iteration
   double forwardWeight = 0.0;         // extra weight on moving beyond the nominal foothold in the walking direction
+  double maxStepHeight = 1e9;         // [m] candidates higher / lower than the previous stance of the foot are rejected
+  double expandedSearchFactor = 1.0;  // selectFoot: search radius factor of the second pass (nothing found in the first)
   double regionInset = 0.02;          // [m] foot placement region radius = edge distance - inset
   double regionMinRadius = 0.02;      // [m]
   double regionMaxRadius = 0.06;      // [m]
@@ -64,12 +67,14 @@ class FootholdPlanner {
    * (centre + offset, offsets in world x/y) lies on a steppable cell at least minEdgeDistance from an edge.
    * The edge penalty uses the smallest edge distance of the support points. Steps longer than nominal along
  * `heading` (unit vector, or zero) cost forwardWeight * overshoot^2 extra: on stairs a shorter step onto the
- * current tread is preferred over reaching for the next one.
+ * current tread is preferred over reaching for the next one. Candidates more than maxStepHeight above or below
+ * `previousHeight` (the last stance of this foot, NaN: no limit) are rejected, e.g. the floor of a pit.
    * @return one foothold per support point, each with its own region.
    */
   std::vector<Foothold> selectFoot(size_t foot, double stanceStartTime, const Eigen::Vector2d& nominalCenter,
                                    const std::vector<Eigen::Vector2d>& supportOffsets, const TerrainMap& map,
-                                   const Eigen::Vector2d& heading = Eigen::Vector2d::Zero());
+                                   const Eigen::Vector2d& heading = Eigen::Vector2d::Zero(),
+                                   double previousHeight = std::numeric_limits<double>::quiet_NaN());
 
   /** Foothold at a fixed position (current stance), no region constraint. */
   static Foothold fixed(const Eigen::Vector3d& position, const TerrainMap& map);

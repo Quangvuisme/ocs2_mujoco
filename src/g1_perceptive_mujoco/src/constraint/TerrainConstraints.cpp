@@ -93,7 +93,8 @@ ocs2::VectorFunctionLinearApproximation FootClearanceConstraint::getLinearApprox
   const double h = referenceManagerPtr_->terrain().inflatedHeightAt(position.f.head<2>(), &gradient);
   auto approx = ocs2::VectorFunctionLinearApproximation::Zero(1, state.size(), 0);
   approx.f(0) = position.f.z() - h - s.footFrameHeight - s.swingClearance - extraClearance_;
-  const Eigen::RowVector3d dgdp(-gradient.x(), -gradient.y(), 1.0);
+  const double g = referenceManagerPtr_->settings().clearanceGradientScale;
+  const Eigen::RowVector3d dgdp(-g * gradient.x(), -g * gradient.y(), 1.0);
   approx.dfdx = dgdp * position.dfdx;
   return approx;
 }
@@ -154,7 +155,8 @@ ocs2::VectorFunctionLinearApproximation ShankClearanceConstraint::getLinearAppro
     Eigen::Vector2d gradient;
     const double h = map.inflatedHeightAt(p.head<2>(), &gradient);
     approx.f(k) = p.z() - h - radius_;
-    const Eigen::RowVector3d dgdp(-gradient.x(), -gradient.y(), 1.0);
+    const double g = referenceManagerPtr_->settings().clearanceGradientScale;
+    const Eigen::RowVector3d dgdp(-g * gradient.x(), -g * gradient.y(), 1.0);
     approx.dfdx.row(k) = dgdp * ((1.0 - s) * foot.dfdx + s * knee.dfdx);
   }
   return approx;

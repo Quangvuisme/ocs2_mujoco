@@ -13,6 +13,8 @@ namespace g1_perceptive {
 /** Parameters of the post-processing that turns raw ray-cast heights into planning layers. */
 struct TerrainProcessingConfig {
   double smoothingRadius = 0.06;   // [m] box filter for the base reference and the normals
+  double gapFillRadius = 0.0;      // [m] closing (max then min filter) before smoothing: gaps narrower than
+                                   //     twice this vanish from the smooth layer, step edges stay in place
   double footRadius = 0.04;        // [m] window in which the surface must be flat for a cell to be steppable
   double maxRoughness = 0.03;      // [m] max deviation from the local plane inside the foot window
   double maxSlope = 0.6;           // [rad] steepest steppable slope
@@ -29,7 +31,7 @@ struct TerrainProcessingConfig {
  * Layers
  *  - rawHeight     : ray-cast height, NaN where the ray hit nothing
  *  - height        : rawHeight with the holes filled from their neighbours
- *  - smooth        : box-filtered height (base reference, normals)
+ *  - smooth        : height with narrow gaps closed, box filtered (base reference, posture, normals)
  *  - inflated      : max-filtered + blurred height, used to keep swing feet above the terrain
  *  - steppable     : 1 where the surface under a foot is flat and not too steep
  *  - edgeDistance  : distance [m] to the closest non-steppable cell

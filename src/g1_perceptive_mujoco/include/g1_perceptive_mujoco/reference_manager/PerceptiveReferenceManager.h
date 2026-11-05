@@ -34,6 +34,9 @@ struct PerceptionSettings {
   bool enableSwingClearance = true;
   bool enableShankClearance = true;       // keep the lower legs off step noses / risers
   double shankRadius = 0.05;              // [m] shank radius + margin
+  // scale of the horizontal map gradient in the clearance constraints: 1 pushes swing feet / shins sideways off
+  // obstacles, 0 only up (at a drop the gradient otherwise pulls the swing foot forward over the edge)
+  double clearanceGradientScale = 1.0;
   double ankleClearance = 0.04;           // [m] swing ankle (pitch joint) above the sole frames + margin
   double shankClearanceMu = 1e-2;
   double shankClearanceDelta = 5e-3;

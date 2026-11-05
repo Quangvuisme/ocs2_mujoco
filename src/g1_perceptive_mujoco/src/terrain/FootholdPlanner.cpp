@@ -89,15 +89,13 @@ Foothold FootholdPlanner::select(size_t leg, double stanceStartTime, const Eigen
 
 std::vector<Foothold> FootholdPlanner::selectFoot(size_t foot, double stanceStartTime, const Eigen::Vector2d& nominalCenter,
                                                   const std::vector<Eigen::Vector2d>& supportOffsets, const TerrainMap& map,
-                                                  const Eigen::Vector2d& heading) {
+                                                  const Eigen::Vector2d& heading, double previousHeight) {
   const Key k = key(foot, stanceStartTime);
   const auto prevIt = previous_.find(k);
   const bool hasPrevious = prevIt != previous_.end();
 
   const double res = map.resolution();
-  const int radiusCells = std::max(1, static_cast<int>(std::ceil(config_.searchRadius / res)));
   const Eigen::Vector2i centre = map.nearestIndex(nominalCenter);
-  const double searchRadius2 = config_.searchRadius * config_.searchRadius;
 
   // edge distance of a support point (0 if it is not steppable)
   auto supportEdge = [&](const Eigen::Vector2d& p) {
@@ -107,13 +105,19 @@ std::vector<Foothold> FootholdPlanner::selectFoot(size_t foot, double stanceStar
     return map.edgeDistanceAt(p);
   };
 
-  // pass 0: every support point >= minEdgeDistance from an edge; pass 1 (fallback): only steppable
+  // passes, until a candidate is found:
+  //   0: search radius, every support point >= minEdgeDistance from an edge
+  //   1: search radius x expandedSearchFactor (e.g. the nominal sole is over a gap wider than the search radius)
+  //   2: expanded radius, only steppable (no region constraint)
   double bestCost = std::numeric_limits<double>::infinity();
   Eigen::Vector2d best = nominalCenter;
   bool regions = true;
-  for (int pass = 0; pass < 2 && !std::isfinite(bestCost); ++pass) {
-    const double minEdge = pass == 0 ? config_.minEdgeDistance : 1e-9;
-    regions = pass == 0;
+  for (int pass = 0; pass < 3 && !std::isfinite(bestCost); ++pass) {
+    const double minEdge = pass < 2 ? config_.minEdgeDistance : 1e-9;
+    regions = pass < 2;
+    const double radius = pass == 0 ? config_.searchRadius : config_.searchRadius * config_.expandedSearchFactor;
+    const int radiusCells = std::max(1, static_cast<int>(std::ceil(radius / res)));
+    const double searchRadius2 = radius * radius;
     for (int dy = -radiusCells; dy <= radiusCells; ++dy) {
       for (int dx = -radiusCells; dx <= radiusCells; ++dx) {
         const int ix = centre.x() + dx;
@@ -142,6 +146,9 @@ std::vector<Foothold> FootholdPlanner::selectFoot(size_t foot, double stanceStar
         if (!level) {
           continue;
         }
+        if (std::isfinite(previousHeight) && std::abs(h0 - previousHeight) > config_.maxStepHeight) {
+          continue;
+        }
         const double edgeDeficit = std::max(0.0, config_.desiredEdgeDistance - pointEdge);
         double cost = d2 + config_.edgeWeight * edgeDeficit * edgeDeficit;
         const double overshoot = std::max(0.0, (c - nominalCenter).dot(heading));
@@ -157,8 +164,8 @@ std::vector<Foothold> FootholdPlanner::selectFoot(size_t foot, double stanceStar
     }
   }
 
-  // no level candidate at all: aim at the nominal sole, every support point at the height under the sole centre
-  const double soleHeight = map.heightAt(best);
+  // no level candidate at all: aim at the nominal sole, every support point at the (gap-closed) height under the sole
+  const double soleHeight = map.smoothHeightAt(best);
   std::vector<Foothold> footholds(supportOffsets.size());
   for (size_t i = 0; i < supportOffsets.size(); ++i) {
     Foothold& f = footholds[i];
@@ -216,6 +223,8 @@ FootholdPlannerConfig loadFootholdPlannerConfig(const std::string& file, const s
   ocs2::loadData::loadPtreeValue(pt, c.edgeWeight, p + "edgeWeight", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.previousWeight, p + "previousWeight", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.forwardWeight, p + "forwardWeight", verbose);
+  ocs2::loadData::loadPtreeValue(pt, c.maxStepHeight, p + "maxStepHeight", verbose);
+  ocs2::loadData::loadPtreeValue(pt, c.expandedSearchFactor, p + "expandedSearchFactor", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.regionInset, p + "regionInset", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.regionMinRadius, p + "regionMinRadius", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.regionMaxRadius, p + "regionMaxRadius", verbose);

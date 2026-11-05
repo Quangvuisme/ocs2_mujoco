@@ -17,6 +17,8 @@
  *   --goal-x X        stop and stand once the base passes x = X; success criterion
  *   --gait NAME       gait from config/command/gait.info (default walk)
  *   --log FILE.csv    base trajectory log
+ *   --trace FILE.csv  detailed trace every 10 ms: base, toe / heel positions, next planned footholds, MPC-predicted
+ *                     toe / heel positions 0.2 s ahead, joint angles and torques
  *   --record FILE     render to FILE (.gif or .mp4) with --width/--height/--fps/--scale/--playback
  *   --no-map          do not draw the elevation map
  *   --blind           do not give the map to the MPC (flat-ground assumption), for comparison
@@ -70,6 +72,7 @@ struct Options {
   double goalX = -1.0;
   std::string gait = "walk";
   std::string logFile;
+  std::string traceFile;
   std::string record;
   int width = 960;
   int height = 540;
@@ -114,6 +117,8 @@ bool parseOptions(int argc, char** argv, Options& o) {
       o.gait = next("--gait");
     } else if (a == "--log") {
       o.logFile = next("--log");
+    } else if (a == "--trace") {
+      o.traceFile = next("--trace");
     } else if (a == "--record") {
       o.record = next("--record");
       o.headless = true;
@@ -333,6 +338,30 @@ int runHeadless(const Options& o, mjModel* m, mjData* d, G1Controller& controlle
   }
 #endif
 
+  std::ofstream trace;
+  const char* contactSites[4] = {"l_foot_toe", "r_foot_toe", "l_foot_heel", "r_foot_heel"};
+  if (!o.traceFile.empty()) {
+    trace.open(o.traceFile);
+    trace << "t,mode,x,y,z,yaw,pitch,roll";
+    for (const char* s : contactSites) {
+      trace << "," << s << "_x," << s << "_y," << s << "_z";
+    }
+    for (const char* s : contactSites) {
+      trace << ",plan_" << s << "_x,plan_" << s << "_y,plan_" << s << "_z";
+    }
+    for (const char* s : contactSites) {
+      trace << ",pred_" << s << "_x,pred_" << s << "_y,pred_" << s << "_z";
+    }
+    for (int j = 0; j < m->nu; ++j) {
+      trace << ",q_" << mj_id2name(m, mjOBJ_JOINT, m->actuator_trnid[2 * j]);
+    }
+    for (int j = 0; j < m->nu; ++j) {
+      trace << ",tau_" << mj_id2name(m, mjOBJ_JOINT, m->actuator_trnid[2 * j]);
+    }
+    trace << ",solve_ms\n";
+  }
+  double nextTrace = 0.0;
+
   std::ofstream log;
   if (!o.logFile.empty()) {
     log.open(o.logFile);
@@ -500,6 +529,45 @@ int runHeadless(const Options& o, mjModel* m, mjData* d, G1Controller& controlle
           << "," << zyx(0) << "," << zyx(1) << "," << zyx(2) << "," << d->qvel[0] << "," << clearance << ","
           << base.z() - clearance << "," << 1e3 * controller.lastSolveDuration() << "\n";
       nextLog += 0.02;
+    }
+    if (trace.is_open() && t >= nextTrace - 1e-9) {
+      trace << std::fixed << std::setprecision(4) << t << "," << mode << "," << base.x() << "," << base.y() << ","
+            << base.z() << "," << zyx(0) << "," << zyx(1) << "," << zyx(2);
+      for (const char* s : contactSites) {
+        const int id = mj_name2id(m, mjOBJ_SITE, s);
+        trace << "," << d->site_xpos[3 * id] << "," << d->site_xpos[3 * id + 1] << "," << d->site_xpos[3 * id + 2];
+      }
+      const auto plan = controller.referenceManager().getPlan();
+      for (size_t c = 0; c < 4; ++c) {
+        const Foothold* next = nullptr;  // first planned foothold of the contact in the horizon
+        for (const auto& [leg, f] : plan.footholds) {
+          if (leg == c) {
+            next = &f;
+            break;
+          }
+        }
+        if (next != nullptr) {
+          trace << "," << next->position.x() << "," << next->position.y() << "," << next->position.z();
+        } else {
+          trace << ",nan,nan,nan";
+        }
+      }
+      const auto predicted = controller.predictedContactPositions(t + 0.2);
+      for (size_t c = 0; c < 4; ++c) {
+        if (c < predicted.size()) {
+          trace << "," << predicted[c].x() << "," << predicted[c].y() << "," << predicted[c].z();
+        } else {
+          trace << ",nan,nan,nan";
+        }
+      }
+      for (int j = 0; j < m->nu; ++j) {
+        trace << "," << d->qpos[m->jnt_qposadr[m->actuator_trnid[2 * j]]];
+      }
+      for (int j = 0; j < m->nu; ++j) {
+        trace << "," << d->ctrl[j];
+      }
+      trace << "," << 1e3 * controller.lastSolveDuration() << "\n";
+      nextTrace += 0.01;
     }
     if (t >= nextPrint - 1e-9) {
       const auto plan = controller.referenceManager().getPlan();

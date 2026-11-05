@@ -16,11 +16,28 @@ A comprehensive framework for Model Predictive Control (MPC) of various robotic 
 |--------------------------------------------------------|--------------------------------------------------------------|
 | ![Roadster kickflip demo](doc/gifs/roadster.gif) | ![ANYmal C perceptive NMPC demo](doc/gifs/anymal_perceptive.gif) |
 
+| Unitree G1 humanoid, 12 DoF (NMPC, no ROS) | Unitree G1 Perceptive NMPC (stairs, elevation map from MuJoCo, no ROS) |
+|--------------------------------------------|------------------------------------------------------------------------|
+| ![Unitree G1 walking demo](doc/gifs/g1.gif) | ![Unitree G1 perceptive NMPC demo](doc/gifs/g1_perceptive.gif) |
+
 ## 1. Summary
 
 This project provides a complete framework for optimal control of legged robots and aerial vehicles using Model Predictive Control (MPC). It integrates OCS2's powerful optimization algorithms with MuJoCo's high-fidelity physics simulation, enabling real-time control of complex robotic systems.
 
 ### What's New (2026.11)
+
+**Perceptive NMPC for the Unitree G1 humanoid (`g1_perceptive_mujoco`)**
+- The ANYmal perception stack (elevation map ray cast from MuJoCo, footholds, swing / shin clearance) on the G1 biped
+- Sole-aware footholds: toe and heel both on steppable cells of one tread; joint limits in the MPC; RNEA with
+  acceleration feedforward and torque-level joint PD
+- Climbs and descends stairs (0.08 m rise, 0.45 m tread) and crosses rough blocks: 23 of 25 scripted runs complete the course
+
+**Unitree G1 humanoid, 12 leg DoF (`g1_walking_mujoco`)**
+- Port of [cyugai/g1_control](https://github.com/cyugai/g1_control) without ROS, in the same format as the ANYmal C package:
+  plain C++ / CMake, OCS2 compiled from `src/ocs2_ros2`, MuJoCo GUI, headless lock-step runs and GIF recording
+- Centroidal NMPC with toe + heel point contacts per foot, biped gaits (walk, trot, quick_trot), height command via leg IK
+- Walks forward / backward / sideways and turns; recovers from 200 N lateral pushes while walking
+- Fix in the vendored OCS2 RNEA conversion: contact forces of points on the same link are now summed
 
 **Perceptive NMPC for ANYmal C (`anymal_perceptive_mujoco`)**
 - Elevation map ray-cast directly from the MuJoCo scene (`mj_ray` per cell): no elevation_mapping / grid_map /
@@ -45,7 +62,7 @@ This project provides a complete framework for optimal control of legged robots 
 
 ### Key Features
 
-- **Multiple Robot Support**: ANYmal C, Unitree Go1/Go2 quadrupeds, quadrotors, cartpole, a jet-powered roadster
+- **Multiple Robot Support**: ANYmal C, Unitree Go1/Go2 quadrupeds, Unitree G1 humanoid, quadrotors, cartpole, a jet-powered roadster
 - **Real-time MPC**: Using OCS2 Centroidal Model and DDP/SQP solvers  
 - **Whole-Body Control**: Converts MPC outputs to joint torques via RNEA
 - **MuJoCo Simulation**: High-fidelity physics simulation with interactive GUI
@@ -102,6 +119,8 @@ This project provides a complete framework for optimal control of legged robots 
 | `ocs2_cartpole_upright` | Cartpole balance | UDP control |
 | `roadster_stunt` | Roadster kickflip on cold-gas jets | OCS2 SLQ plan + NMPC, MuJoCo GUI, GIF recording |
 | `anymal_perceptive_mujoco` | ANYmal C perceptive NMPC (no ROS) | Elevation map from MuJoCo, footholds, stairs, plain CMake |
+| `g1_walking_mujoco` | Unitree G1 humanoid (12 DoF) NMPC (no ROS) | Toe/heel contacts, biped gaits, MuJoCo GUI, plain CMake |
+| `g1_perceptive_mujoco` | Unitree G1 perceptive NMPC (no ROS) | Elevation map from MuJoCo, sole footholds, stairs, plain CMake |
 
 ### Support Packages
 
@@ -504,6 +523,81 @@ src/anymal_perceptive_mujoco/scripts/make_gif.sh
 - Completed the course in 37 of 40 scripted runs (3 speeds x 6 start offsets)
 
 </details>
+
+### 6.9 Unitree G1 Humanoid Walking (12 DoF, no ROS)
+
+<details>
+<summary>🚶 Click to expand humanoid walking example</summary>
+
+Centroidal NMPC for the Unitree G1 with its 12 leg joints (waist and arms fixed), ported from
+[cyugai/g1_control](https://github.com/cyugai/g1_control) without ROS. Same format as the ANYmal C package; details in
+[src/g1_walking_mujoco/README.md](src/g1_walking_mujoco/README.md).
+
+**Build (no ROS):**
+```bash
+pip install pin cmeel-urdfdom-headers          # pinocchio 3 (or robotpkg / any pinocchio 3 install)
+export MUJOCO_DIR=/path/to/mujoco-3.3.0         # MuJoCo release directory
+src/g1_walking_mujoco/scripts/build.sh          # -> build/g1_walking/
+```
+
+**Run:**
+```bash
+# MuJoCo GUI (keys 2 -> 3 -> 4 in the terminal, then W/A/S/D, J/L, G for the next gait)
+build/g1_walking/g1_walking_mujoco
+
+# Deterministic headless run: walk 2 m at 0.3 m/s and stop (exit code 0 = goal reached without falling)
+build/g1_walking/g1_walking_mujoco --headless --vx 0.3 --goal-x 2.0
+
+# Re-record doc/gifs/g1.gif (needs ffmpeg, uses xvfb-run without a display)
+src/g1_walking_mujoco/scripts/make_gif.sh
+```
+
+**Features:**
+- 4 point contacts (toe + heel of each foot), friction cones, ankle roll lock, swing height splines
+- Gaits: `walk` (with double support), `trot` and `quick_trot` (alternating single support)
+- Pelvis height command with a leg IK posture reference (0.66 – 0.76 m)
+- RNEA whole-body torques + joint PD at 1 kHz, MPC (SLQ) at 100 Hz, ~6 ms per solve while walking
+
+</details>
+
+### 6.10 Perceptive NMPC on Terrain (Unitree G1, no ROS)
+
+<details>
+<summary>🧗 Click to expand humanoid perceptive locomotion example</summary>
+
+The G1 MPC of 6.9 with the perception of 6.8: an elevation map ray cast from the MuJoCo scene, footholds where the toe
+and the heel of a sole both land on one steppable tread, swing and shin clearance above the map. Details in
+[src/g1_perceptive_mujoco/README.md](src/g1_perceptive_mujoco/README.md).
+
+**Build (no ROS):**
+```bash
+pip install pin cmeel-urdfdom-headers          # pinocchio 3 (or robotpkg / any pinocchio 3 install)
+export MUJOCO_DIR=/path/to/mujoco-3.3.0         # MuJoCo release directory
+src/g1_perceptive_mujoco/scripts/build.sh       # -> build/g1_perceptive/
+```
+
+**Run:**
+```bash
+# MuJoCo GUI on the stairs / rough-block course (keys 2 -> 3 -> 4 in the terminal, then W/A/S/D)
+build/g1_perceptive/g1_perceptive_mujoco
+
+# Deterministic headless run over the whole course (exit code 0 when the goal is reached)
+build/g1_perceptive/g1_perceptive_mujoco --headless --vx 0.25 --goal-x 8.4
+
+# The same run with a blind MPC (flat-ground assumption): falls at the first step
+build/g1_perceptive/g1_perceptive_mujoco --headless --vx 0.25 --goal-x 8.4 --blind
+
+# Re-record doc/gifs/g1_perceptive.gif (needs ffmpeg, uses xvfb-run without a display)
+src/g1_perceptive_mujoco/scripts/make_gif.sh
+```
+
+**Features:**
+- Foothold search for a whole sole: toe and heel on steppable cells, on one level, away from step edges
+- Pelvis height over the terrain and 6D leg IK posture with the soles flat on the terrain
+- Swing toe / heel / ankle and shin clearance above the map, joint limits in the MPC
+- 23 of 25 scripted runs complete the course (0.2 – 0.3 m/s, lateral offsets up to ±0.3 m)
+
+</details>
 colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release --symlink-install
 
 # Source workspace
@@ -601,13 +695,19 @@ Xbox controller provides the same functionality through analog sticks and button
 | **Unitree Go1** | 12 | 12 kg | Consumer-grade, affordable |
 | **Unitree Go2** | 12 | 15 kg | Improved Go1, better sensors |
 
-### 9.2 Aerial Vehicles
+### 9.2 Humanoids
+
+| Robot | DOF | Mass | Features |
+|-------|-----|------|----------|
+| **Unitree G1** | 12 (legs; waist / arms fixed) | 32 kg | Toe + heel contacts per foot, biped gaits |
+
+### 9.3 Aerial Vehicles
 
 | Robot | DOF | Control | Features |
 |-------|-----|---------|----------|
 | **Quadrotor** | 6 (SE(3)) | 4 motors | X-configuration, aggressive maneuvers |
 
-### 9.3 Others
+### 9.4 Others
 
 | Robot | DOF | Type | Features |
 |-------|-----|------|----------|
@@ -720,6 +820,7 @@ This project is licensed under the **BSD 3-Clause License** - see the [LICENSE](
 | OCS2 | BSD 3-Clause | Farbod Farshidian, ETH Zurich |
 | ANYmal C | BSD 3-Clause | ANYbotics AG |
 | Unitree Robots | BSD 3-Clause | Unitree Robotics |
+| g1_control (G1 12-DoF model) | MIT | botianhao |
 | MuJoCo | Apache 2.0 | DeepMind Technologies |
 | Pinocchio | BSD 2-Clause | CNRS, INRIA |
 

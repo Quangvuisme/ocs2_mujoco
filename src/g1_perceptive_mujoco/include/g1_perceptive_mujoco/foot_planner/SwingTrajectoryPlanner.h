@@ -21,6 +21,10 @@ class SwingTrajectoryPlanner {
     ocs2::scalar_t touchDownVelocity = 0.0;
     ocs2::scalar_t swingHeight = 0.1;     // apex above max(lift-off, touch-down, obstacle)
     ocs2::scalar_t swingTimeScale = 0.15;  // swing phases shorter than this are scaled down in height and velocity
+    // time of the apex as a fraction of the swing when the touch-down is >= 5 cm lower / higher than the lift-off:
+    // late when stepping down (the sole stays above the nose it leaves), early when stepping up
+    ocs2::scalar_t stepDownApexPhase = 0.5;
+    ocs2::scalar_t stepUpApexPhase = 0.5;
   };
 
   SwingTrajectoryPlanner(Config config, size_t numFeet);

@@ -2,8 +2,10 @@
 
 
 namespace g1_perceptive {
-    SplineCpg::SplineCpg(CubicSpline::Node liftOff, ocs2::scalar_t midHeight, CubicSpline::Node touchDown)
-        : midTime_((liftOff.time + touchDown.time) / 2),
+    SplineCpg::SplineCpg(CubicSpline::Node liftOff, ocs2::scalar_t midHeight, CubicSpline::Node touchDown,
+                         ocs2::scalar_t apexPhase)
+        : apexPhase_(apexPhase),
+          midTime_(liftOff.time + apexPhase * (touchDown.time - liftOff.time)),
           leftSpline_(liftOff, CubicSpline::Node{midTime_, midHeight, 0.0}),
           rightSpline_(CubicSpline::Node{midTime_, midHeight, 0.0}, touchDown) {
     }
@@ -26,16 +28,16 @@ namespace g1_perceptive {
 
     ocs2::scalar_t SplineCpg::startTimeDerivative(ocs2::scalar_t time) const {
         if (time <= midTime_) {
-            return leftSpline_.startTimeDerivative(time) + 0.5 * leftSpline_.startTimeDerivative(time);
+            return leftSpline_.startTimeDerivative(time) + (1.0 - apexPhase_) * leftSpline_.startTimeDerivative(time);
         }
-        return 0.5 * rightSpline_.startTimeDerivative(time);
+        return (1.0 - apexPhase_) * rightSpline_.startTimeDerivative(time);
     }
 
 
     ocs2::scalar_t SplineCpg::finalTimeDerivative(ocs2::scalar_t time) const {
         if (time <= midTime_) {
-            return 0.5 * leftSpline_.finalTimeDerivative(time);
+            return apexPhase_ * leftSpline_.finalTimeDerivative(time);
         }
-        return rightSpline_.finalTimeDerivative(time) + 0.5 * rightSpline_.finalTimeDerivative(time);
+        return rightSpline_.finalTimeDerivative(time) + apexPhase_ * rightSpline_.finalTimeDerivative(time);
     }
 } // namespace g1_perceptive

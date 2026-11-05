@@ -1,0 +1,2 @@
+# per-section test scenes written by the tuning scripts (scripts/generate_parkour.py --sections ... -o robots/g1/_<level>_<section>.xml)
+robots/g1/_*.xml

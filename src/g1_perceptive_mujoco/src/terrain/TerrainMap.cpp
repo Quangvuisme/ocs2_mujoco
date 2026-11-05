@@ -72,6 +72,18 @@ void maxFilter(const std::vector<float>& in, std::vector<float>& out, int sizeX,
   }
 }
 
+/** Separable min filter (square window). */
+void minFilter(const std::vector<float>& in, std::vector<float>& out, int sizeX, int sizeY, int radius) {
+  std::vector<float> negated(in.size());
+  for (size_t i = 0; i < in.size(); ++i) {
+    negated[i] = -in[i];
+  }
+  maxFilter(negated, out, sizeX, sizeY, radius);
+  for (auto& v : out) {
+    v = -v;
+  }
+}
+
 }  // namespace
 
 TerrainMap::TerrainMap(double resolution, int sizeX, int sizeY, const Eigen::Vector2d& origin)
@@ -157,8 +169,17 @@ void TerrainMap::process(const TerrainProcessingConfig& config) {
   }
 
   // 2) smooth layer
+  //    narrow gaps (pits) are closed first, so the base reference and the posture do not dive into them
   const int smoothRadius = static_cast<int>(std::lround(config.smoothingRadius / resolution_));
-  boxFilter(height_, smooth_, sizeX_, sizeY_, smoothRadius);
+  const int gapRadius = static_cast<int>(std::lround(config.gapFillRadius / resolution_));
+  if (gapRadius > 0) {
+    std::vector<float> dilated, closed;
+    maxFilter(height_, dilated, sizeX_, sizeY_, gapRadius);
+    minFilter(dilated, closed, sizeX_, sizeY_, gapRadius);
+    boxFilter(closed, smooth_, sizeX_, sizeY_, smoothRadius);
+  } else {
+    boxFilter(height_, smooth_, sizeX_, sizeY_, smoothRadius);
+  }
 
   // 3) steppability: local plane fit inside the foot window
   const int footRadius = std::max(1, static_cast<int>(std::lround(config.footRadius / resolution_)));
@@ -335,6 +356,7 @@ TerrainProcessingConfig loadTerrainProcessingConfig(const std::string& file, con
   TerrainProcessingConfig c;
   const std::string p = prefix + ".";
   ocs2::loadData::loadPtreeValue(pt, c.smoothingRadius, p + "smoothingRadius", verbose);
+  ocs2::loadData::loadPtreeValue(pt, c.gapFillRadius, p + "gapFillRadius", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.footRadius, p + "footRadius", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.maxRoughness, p + "maxRoughness", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.maxSlope, p + "maxSlope", verbose);

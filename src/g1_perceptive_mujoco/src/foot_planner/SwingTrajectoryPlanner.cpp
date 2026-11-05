@@ -74,7 +74,13 @@ void SwingTrajectoryPlanner::update(const ocs2::ModeSchedule& modeSchedule,
         const CubicSpline::Node liftOff{swingStartTime, liftOffHeight, scaling * config_.liftOffVelocity};
         const CubicSpline::Node touchDown{swingFinalTime, touchDownHeight, scaling * config_.touchDownVelocity};
         const ocs2::scalar_t midHeight = clearBase + scaling * config_.swingHeight;
-        feetHeightTrajectories_[j].emplace_back(liftOff, midHeight, touchDown);
+        ocs2::scalar_t apexPhase = 0.5;
+        if (touchDownHeight < liftOffHeight - 0.05) {
+          apexPhase = config_.stepDownApexPhase;
+        } else if (touchDownHeight > liftOffHeight + 0.05) {
+          apexPhase = config_.stepUpApexPhase;
+        }
+        feetHeightTrajectories_[j].emplace_back(liftOff, midHeight, touchDown, apexPhase);
       } else {  // stance leg
         // Note: setting the time here arbitrarily to 0.0 -> 1.0 makes the assert in CubicSpline fail
         const ocs2::scalar_t h = liftOffHeightSequence[j][p];
@@ -163,6 +169,8 @@ SwingTrajectoryPlanner::Config loadSwingTrajectorySettings(const std::string& fi
   ocs2::loadData::loadPtreeValue(pt, config.touchDownVelocity, prefix + "touchDownVelocity", verbose);
   ocs2::loadData::loadPtreeValue(pt, config.swingHeight, prefix + "swingHeight", verbose);
   ocs2::loadData::loadPtreeValue(pt, config.swingTimeScale, prefix + "swingTimeScale", verbose);
+  ocs2::loadData::loadPtreeValue(pt, config.stepDownApexPhase, prefix + "stepDownApexPhase", verbose);
+  ocs2::loadData::loadPtreeValue(pt, config.stepUpApexPhase, prefix + "stepUpApexPhase", verbose);
   return config;
 }
 

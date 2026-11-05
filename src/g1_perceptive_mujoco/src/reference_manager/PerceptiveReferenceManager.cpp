@@ -250,6 +250,9 @@ void PerceptiveReferenceManager::planFootholds(ocs2::scalar_t initTime, ocs2::sc
       return m;
     }();
 
+    // height of the previous stance of this foot (limits the step height of the next foothold)
+    double previousHeight = hasLastStancePosition_[toe] ? lastStancePosition_[toe].z() : measuredContact[toe].z();
+
     size_t i = 0;
     while (i < numPhases) {
       if (!contact[i]) {
@@ -287,11 +290,14 @@ void PerceptiveReferenceManager::planFootholds(ocs2::scalar_t initTime, ocs2::sc
         const Eigen::Vector2d heelXY = nominalFootXY(heel, desired) + feedback;
         const Eigen::Vector2d centre = 0.5 * (toeXY + heelXY);
         const Eigen::Vector2d heading(std::cos(desired(9)), std::sin(desired(9)));
-        const auto selected =
-            footholdPlanner_.selectFoot(foot, startTime, centre, {toeXY - centre, heelXY - centre}, *terrain_, heading);
+        const double side = foot == 0 ? 1.0 : -1.0;  // foot 0: left, foot 1: right
+        const auto selected = footholdPlanner_.selectFoot(foot, startTime, centre, {toeXY - centre, heelXY - centre},
+                                                          *terrain_, heading, previousHeight,
+                                                          Eigen::Vector2d(desired(6), desired(7)), side);
         toeFoothold = selected[0];
         heelFoothold = selected[1];
       }
+      previousHeight = toeFoothold.position.z();
       for (size_t k = i; k <= j; ++k) {
         footholds_[toe][k] = toeFoothold;
         footholds_[heel][k] = heelFoothold;
@@ -355,6 +361,7 @@ PerceptionSettings loadPerceptionSettings(const std::string& file, const std::st
   ocs2::loadData::loadPtreeValue(pt, s.enableShankClearance, p + "enableShankClearance", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.shankRadius, p + "shankRadius", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.ankleClearance, p + "ankleClearance", verbose);
+  ocs2::loadData::loadPtreeValue(pt, s.clearanceGradientScale, p + "clearanceGradientScale", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.shankClearanceMu, p + "shankClearanceMu", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.shankClearanceDelta, p + "shankClearanceDelta", verbose);
   ocs2::loadData::loadPtreeValue(pt, s.footPlacementMu, p + "footPlacementMu", verbose);

@@ -110,6 +110,49 @@ Runs are close to deterministic: repeated runs of the same variant gave the same
 Timing on a 4-core cloud VM, one run at a time: MPC 7.5 ms on average (20 ms max) at 100 Hz, elevation map
 6.5 ms at 20 Hz. The course takes about 41 s simulated, 38 s wall time.
 
+## Parkour course (work in progress)
+
+![G1 parkour: ramp, hurdles, 0.15 m step](../../doc/gifs/g1_parkour.gif)
+
+*Ramp (12 deg), two 0.10 m hurdles and a 0.15 m step up and down, `task_parkour.info`, 0.25 m/s, 3x speed
+(`generate_parkour.py --sections ramp,hurdles,bigstep`). Completed without a fall.*
+
+![G1 parkour, full course attempt](../../doc/gifs/g1_parkour_full.gif)
+
+*Full course (`scene_parkour.xml`), 0.25 m/s, 3x speed: 0.12 m stairs up and down and the 0.10 / 0.15 / 0.20 m gaps,
+then a fall on the stepping stones at x = 10.5 m (the furthest of all full-course runs so far).*
+
+`scripts/generate_parkour.py` builds a harder course on top of a pit floor 0.5 m below the start level
+(`robots/g1/scene_parkour.xml`, goal x = 21.37 m; `--level hard` writes a harder variant with 0.15 m stairs,
+0.20 - 0.30 m gaps, an 18 deg ramp, 0.15 m hurdles and a 0.20 m step). Sections: 0.12 m stairs, gaps of 0.10 / 0.15 /
+0.20 m, stepping stones, a 12 deg ramp, 0.10 m hurdles, a 0.15 m step. `--sections a,b -o file.xml` writes single
+sections for testing, `--param section.key=value` overrides a dimension (e.g. `--param stones.length=0.4`).
+
+```bash
+build/g1_perceptive/g1_perceptive_mujoco src/g1_perceptive_mujoco/robots/g1/scene_parkour.xml \
+  --task src/g1_perceptive_mujoco/config/mpc/task_parkour.info --headless --vx 0.25 --goal-x 21.37 --trace run.csv
+```
+
+`config/mpc/task_parkour.info` = `task.info` plus the options added for it (all off by default in `task.info`):
+
+| Option | What it does |
+|--------|--------------|
+| `elevation_mapper.processing.gapFillRadius` | Morphological closing of the smooth layer: narrow pits do not pull the pelvis reference and the leg posture down |
+| `foothold.maxStepHeight` | Rejects footholds far above / below the foot's previous stance (pit floors) |
+| `foothold.expandedSearchFactor` | Second, wider search when the nominal sole is over a gap wider than the search radius |
+| `foothold.minLateralOffset` | Each sole stays on its own side of the pelvis line (no crossed legs); off by default, did not improve the full course (0/5 runs) |
+| `swing_trajectory_config.stepDownApexPhase` | Apex later in the swing when stepping down, so the heel does not drop onto the nose it leaves |
+| `perception.clearanceGradientScale` | Scale of the sideways map gradient in the clearance constraints (1: as before) |
+
+`--trace FILE.csv` logs, every 10 ms, the pelvis, the toe / heel positions, the next planned footholds, the toe / heel
+positions the MPC predicts 0.2 s ahead, joint angles and torques.
+
+Per-section results with `task_parkour.info` (3 speeds x 3 lateral offsets, 9 runs each, normal level): gaps 9/9,
+stairs 7/9, single 0.15 m step 6/9, stepping stones 3/9; with smaller sizes: 0.10 m stairs 9/9, 0.12 m step 8/9,
+12 deg ramp 8/9, 0.10 m hurdles 6/9, 0.40 m long stones 2/9. **The full course has not been completed**: 0 of 11
+runs in a 5-minute loop (0.2 - 0.3 m/s, offsets up to 0.1 m); they fall on the 0.12 m stairs down or on the stones. Step-downs are the weak spot: the hip / knee torques saturate and the swing foot lands short, both effects of
+the single-rigid-body model (the G1 legs are 45 % of the mass) and of the RNEA + PD whole-body control.
+
 ## Notes and limitations
 
 * Perfect state estimation, noise-free map from the scene geometry.

@@ -1,0 +1,307 @@
+; Parkour settings (work in progress): task.info plus the options for gaps, stepping stones and step-downs.
+; Use with: g1_perceptive_mujoco robots/g1/scene_parkour.xml --task config/mpc/task_parkour.info
+centroidalModelType             1      // 0: FullCentroidalDynamics, 1: Single Rigid Body Dynamics
+
+g1_interface
+{
+  verbose                               false  // show the loaded parameters
+  contactHeight                         0.005  // [m] contact frames (toe / heel sphere centres) above the ground in stance
+}
+
+model_settings
+{
+  positionErrorGain             20.0   ; swing foot z tracks the terrain-aware spline (position + velocity)
+  phaseTransitionStanceTime     0.4
+
+  verboseCppAd                  true
+  recompileLibrariesCppAd       true   ; set false to reuse the generated libraries (faster start-up)
+  modelFolderCppAd              /tmp/g1_perceptive_mujoco
+}
+
+swing_trajectory_config
+{
+  liftOffVelocity               0.3    ; fast lift-off: clear step risers before moving forward
+  touchDownVelocity            -0.3
+  swingHeight                   0.10   ; apex above max(lift-off, touch-down, highest obstacle on the way) [m]
+  stepDownApexPhase             0.65   ; apex later in the swing when stepping down: the sole stays above the nose it leaves
+  swingTimeScale                0.15
+}
+
+; ==================================================================================================
+; Perception: elevation map ray cast directly from the MuJoCo scene (no ROS / grid_map / plane
+; segmentation packages)
+; ==================================================================================================
+elevation_mapper
+{
+  resolution                    0.02   ; [m]
+  lengthX                       3.2    ; [m] robot-centric map, world-aligned
+  lengthY                       3.2    ; [m]
+  rayStartHeight                1.0    ; [m] rays start this far above the base, pointing down
+  updateRate                    20.0   ; [Hz]
+  numThreads                    2
+
+  ; geom groups the rays can hit (G1: visual geoms in group 2, collision geoms in group 3)
+  geomGroup0                    true
+  geomGroup1                    true
+  geomGroup2                    false
+  geomGroup3                    false
+  geomGroup4                    false
+  geomGroup5                    false
+
+  processing
+  {
+    gapFillRadius               0.16   ; [m] pits narrower than 0.32 m are closed in the smooth layer (pelvis, posture)
+    smoothingRadius             0.06   ; [m] box filter of the base reference layer
+    footRadius                  0.03   ; [m] the surface must be planar within this radius to be steppable
+    maxRoughness                0.02   ; [m] max deviation from the local plane
+    maxSlope                    0.6    ; [rad]
+    swingInflation              0.03   ; [m] dilation of the swing clearance layer (keep it < foothold desiredEdgeDistance)
+    maxEdgeDistance             0.30   ; [m]
+  }
+}
+
+perception
+{
+  numTargetNodes                11     ; base reference nodes over the horizon
+  basePitchGain                 0.0    ; humanoid: the pelvis stays level (the posture IK assumes it)
+  basePitchGainDown             0.0
+  baseRollGain                  0.0
+  maxBasePitch                  0.0    ; [rad]
+  maxBaseRoll                   0.0    ; [rad]
+  jointReferenceFromIk          true   ; joint posture reference from 6D leg IK: soles flat on the terrain under them
+
+  footFrameHeight               0.005  ; [m] toe / heel frames (sole sphere centres) above the contact surface
+
+  swingClearance                0.01   ; [m] swing foot margin above the inflated map
+  swingConstraintLiftOffMargin  0.0    ; [s] clearance constraint inactive right after lift-off ...
+  swingConstraintTouchDownMargin 0.06  ; [s] ... and right before touch-down
+
+  footPlacementMu               1e-2   ; relaxed barrier of the foot placement regions
+  footPlacementDelta            5e-3   ; delta 1e-3 makes the SLQ Riccati ODE stiff when a region is violated
+  swingClearanceMu              1e-1   ; relaxed barrier of the swing clearance (1e-2: toes catch step risers)
+  swingClearanceDelta           5e-3
+  enableShankClearance          true   ; keep 2 points on every shin (30% / 70% from ankle to knee) above the map
+  shankRadius                   0.06   ; [m] shin radius (~4 cm) + margin
+  ankleClearance                0.06   ; [m] swing ankle (pitch joint, 4.8 cm above the sole) above the map + margin
+  shankClearanceMu              1e-2
+  shankClearanceDelta           5e-3
+
+  foothold
+  {
+    searchRadius                0.20   ; [m] around the nominal (Raibert) sole centre
+    minEdgeDistance             0.03   ; [m] hard reject (toe and heel)
+    desiredEdgeDistance         0.08   ; [m] soft preference: stay off step noses and away from risers
+    edgeWeight                  8.0
+    previousWeight              0.5    ; hysteresis w.r.t. the previous MPC iteration
+    maxStepHeight               0.20   ; [m] reject footholds this much above / below the previous stance (pit floors)
+    expandedSearchFactor        1.75   ; second search pass with a wider radius (sole nominally over a gap)
+    forwardWeight               0.0    ; extra cost of stepping beyond the nominal foothold (5: similar results)
+    regionInset                 0.02   ; [m]
+    regionMinRadius             0.02   ; [m]
+    regionMaxRadius             0.04   ; [m]
+    numVertices                 8
+    feedbackGain                1.0
+    maxFeedbackX                0.10   ; [m]
+    maxFeedbackY                0.08   ; [m]
+  }
+}
+
+controller
+{
+  standUpKp                     200.0  ; [Nm/rad] PD stand-up
+  standUpKd                     5.0
+  standUpDuration               1.0    ; [s]
+  wbcJointKp                    400.0  ; acceleration-level joint PD of the RNEA whole-body control
+  wbcJointKd                    40.0
+  jointKp                       100.0  ; [Nm/rad] torque-level joint PD on top (the ankle PD above is ~4 Nm/rad: limp swing feet)
+  jointKd                       3.0
+  accelerationFeedforward       true   ; planned joint accelerations as RNEA feedforward (else the swing feet land short)
+  maxJointAcceleration          100.0  ; [rad/s^2]
+  commandHorizon                1.0    ; [s]
+  maxCommandLead                0.10   ; [m] integrated walking command stays within this of the base (0: no position feedback)
+  maxCommandYawLead             0.20   ; [rad]
+}
+
+; DDP settings
+ddp
+{
+  algorithm                       SLQ
+
+  nThreads                        3
+  threadPriority                  50
+
+  maxNumIterations                1
+  minRelCost                      1e-1
+  constraintTolerance             5e-3
+
+  displayInfo                     false
+  displayShortSummary             false
+  checkNumericalStability         false
+  debugPrintRollout               false
+
+  AbsTolODE                       1e-5
+  RelTolODE                       1e-3
+  maxNumStepsPerSecond            10000
+  timeStep                        0.015
+  backwardPassIntegratorType      ODE45
+
+  constraintPenaltyInitialValue   20.0
+  constraintPenaltyIncreaseRate   2.0
+
+  preComputeRiccatiTerms          true
+
+  useFeedbackPolicy               false
+
+  strategy                        LINE_SEARCH
+  lineSearch
+  {
+    minStepLength                 1e-2
+    maxStepLength                 1.0
+    hessianCorrectionStrategy     DIAGONAL_SHIFT
+    hessianCorrectionMultiple     1e-5
+  }
+}
+
+; Rollout settings
+rollout
+{
+  AbsTolODE                       1e-5
+  RelTolODE                       1e-3
+  timeStep                        0.015
+  integratorType                  ODE45
+  maxNumStepsPerSecond            10000
+  checkNumericalStability         false
+}
+
+mpc
+{
+  timeHorizon                     1.0  ; [s]
+  solutionTimeWindow              -1   ; maximum [s]
+  coldStart                       false
+
+  debugPrint                      false
+
+  mpcDesiredFrequency             100 ; [Hz]
+  mrtDesiredFrequency             400 ; [Hz]
+}
+
+initialState
+{
+   ;; Normalized Centroidal Momentum: [linear, angular] ;;
+   (0,0)  0.0     ; vcom_x
+   (1,0)  0.0     ; vcom_y
+   (2,0)  0.0     ; vcom_z
+   (3,0)  0.0     ; L_x / robotMass
+   (4,0)  0.0     ; L_y / robotMass
+   (5,0)  0.0     ; L_z / robotMass
+
+   ;; Base Pose: [position, orientation] ;;
+   (6,0)  0.0     ; p_base_x
+   (7,0)  0.0     ; p_base_y
+   (8,0)  0.73    ; p_base_z (pelvis)
+   (9,0)  0.0     ; theta_base_z
+   (10,0) 0.0     ; theta_base_y
+   (11,0) 0.0     ; theta_base_x
+
+   ;; Leg Joint Positions: [left leg, right leg] ;;
+   (12,0) -0.40   ; left_hip_pitch_joint
+   (13,0)  0.00   ; left_hip_roll_joint
+   (14,0)  0.00   ; left_hip_yaw_joint
+   (15,0)  0.87   ; left_knee_joint
+   (16,0) -0.47   ; left_ankle_pitch_joint  (flat sole: hip + knee + ankle = 0)
+   (17,0)  0.00   ; left_ankle_roll_joint
+   (18,0) -0.40   ; right_hip_pitch_joint
+   (19,0)  0.00   ; right_hip_roll_joint
+   (20,0)  0.00   ; right_hip_yaw_joint
+   (21,0)  0.87   ; right_knee_joint
+   (22,0) -0.47   ; right_ankle_pitch_joint
+   (23,0)  0.00   ; right_ankle_roll_joint
+}
+
+; standard state weight matrix
+Q
+{
+  scaling 1e+0
+
+  ;; Normalized Centroidal Momentum: [linear, angular] ;;
+  (0,0)   15.0     ; vcom_x
+  (1,1)   15.0     ; vcom_y
+  (2,2)   30.0     ; vcom_z
+  (3,3)   5.0      ; L_x / robotMass
+  (4,4)   10.0     ; L_y / robotMass
+  (5,5)   10.0     ; L_z / robotMass
+
+  ;; Base Pose: [position, orientation] ;;
+  (6,6)   1000.0   ; p_base_x
+  (7,7)   1000.0   ; p_base_y
+  (8,8)   500.0    ; p_base_z
+  (9,9)   200.0    ; theta_base_z
+  (10,10) 2000.0   ; theta_base_y
+  (11,11) 2000.0   ; theta_base_x
+
+  ;; Leg Joint Positions: [left leg, right leg] ;;
+  (12,12) 50.0     ; left_hip_pitch_joint
+  (13,13) 400.0    ; left_hip_roll_joint
+  (14,14) 250.0    ; left_hip_yaw_joint
+  (15,15) 30.0     ; left_knee_joint
+  (16,16) 150.0    ; left_ankle_pitch_joint
+  (17,17) 10.0     ; left_ankle_roll_joint
+  (18,18) 50.0     ; right_hip_pitch_joint
+  (19,19) 400.0    ; right_hip_roll_joint
+  (20,20) 250.0    ; right_hip_yaw_joint
+  (21,21) 30.0     ; right_knee_joint
+  (22,22) 150.0    ; right_ankle_pitch_joint
+  (23,23) 10.0     ; right_ankle_roll_joint
+}
+
+; control weight matrix
+R
+{
+  scaling 1e-3
+
+  ;; Contact Forces: [l_foot_toe, r_foot_toe, l_foot_heel, r_foot_heel] ;;
+  (0,0)   4.0       ; x
+  (1,1)   4.0       ; y
+  (2,2)   4.0       ; z
+  (3,3)   4.0       ; x
+  (4,4)   4.0       ; y
+  (5,5)   4.0       ; z
+  (6,6)   4.0       ; x
+  (7,7)   4.0       ; y
+  (8,8)   4.0       ; z
+  (9,9)   4.0       ; x
+  (10,10) 4.0       ; y
+  (11,11) 4.0       ; z
+
+  ;; contact point velocity relative to the base (uses the Jacobian at the nominal configuration) ;;
+  (12,12) 2000.0    ; x
+  (13,13) 4000.0    ; y
+  (14,14) 2000.0    ; z
+  (15,15) 2000.0    ; x
+  (16,16) 4000.0    ; y
+  (17,17) 2000.0    ; z
+  (18,18) 2000.0    ; x
+  (19,19) 4000.0    ; y
+  (20,20) 2000.0    ; z
+  (21,21) 2000.0    ; x
+  (22,22) 4000.0    ; y
+  (23,23) 2000.0    ; z
+}
+
+frictionConeSoftConstraint
+{
+  frictionCoefficient    0.7
+
+  ; relaxed log barrier parameters
+  mu                     0.1
+  delta                  5.0
+}
+
+; joint position limits of the URDF in the MPC (relaxed barrier); without them the planned ankle pitch
+; goes past the G1 limit (-0.87 rad) on stairs and the real sole tilts
+jointLimits
+{
+  margin  0.05   ; [rad] inside the URDF limits
+  mu      0.1
+  delta   0.05
+}

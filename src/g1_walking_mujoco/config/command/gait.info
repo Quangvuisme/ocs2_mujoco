@@ -1,0 +1,74 @@
+; Biped gaits. Modes: STANCE (double support), LCONTACT (left foot on the ground, right foot swings),
+; RCONTACT (right foot on the ground, left foot swings), FLY.
+list
+{
+  [0] stance
+  [1] walk
+  [2] trot
+  [3] quick_trot
+}
+
+stance
+ {
+   modeSequence
+   {
+     [0]     STANCE
+   }
+   switchingTimes
+   {
+     [0]     0.0
+     [1]     0.5
+   }
+}
+
+; single support 0.4 s + double support 0.2 s per step
+walk
+ {
+   modeSequence
+   {
+     [0]     LCONTACT
+     [1]     STANCE
+     [2]     RCONTACT
+     [3]     STANCE
+   }
+   switchingTimes
+   {
+     [0]     0.0
+     [1]     0.4
+     [2]     0.6
+     [3]     1.0
+     [4]     1.2
+   }
+}
+
+; alternating single support, 0.45 s per step ("step" in the FSM)
+trot
+ {
+   modeSequence
+   {
+     [0]     LCONTACT
+     [1]     RCONTACT
+   }
+   switchingTimes
+   {
+     [0]     0.0
+     [1]     0.45
+     [2]     0.9
+   }
+}
+
+; alternating single support, 0.3 s per step ("quick step" in the FSM)
+quick_trot
+ {
+   modeSequence
+   {
+     [0]     LCONTACT
+     [1]     RCONTACT
+   }
+   switchingTimes
+   {
+     [0]     0.0
+     [1]     0.3
+     [2]     0.6
+   }
+}

@@ -196,8 +196,9 @@ namespace ocs2
             const Matrix3 rotationWorldFrameToJointFrame = data.oMi[jointIndex].rotation().transpose();
             const Vector3 contactForce = rotationWorldFrameToJointFrame * centroidal_model::getContactForces(
                 desiredInput, i, info);
-            fextDesired[jointIndex].linear() = contactForce;
-            fextDesired[jointIndex].angular() = translationJointFrameToContactFrame.cross(contactForce);
+            // accumulate: several contact points can share a parent joint (e.g. toe + heel of a humanoid foot)
+            fextDesired[jointIndex].linear() += contactForce;
+            fextDesired[jointIndex].angular() += translationJointFrameToContactFrame.cross(contactForce);
         }
         for (size_t i = info.numThreeDofContacts; i < info.numThreeDofContacts + info.numSixDofContacts; i++)
         {
@@ -209,8 +210,8 @@ namespace ocs2
                 desiredInput, i, info);
             const Vector3 contactTorque = rotationWorldFrameToJointFrame * centroidal_model::getContactTorques(
                 desiredInput, i, info);
-            fextDesired[jointIndex].linear() = contactForce;
-            fextDesired[jointIndex].angular() = translationJointFrameToContactFrame.cross(contactForce) + contactTorque;
+            fextDesired[jointIndex].linear() += contactForce;
+            fextDesired[jointIndex].angular() += translationJointFrameToContactFrame.cross(contactForce) + contactTorque;
         }
 
         // measured

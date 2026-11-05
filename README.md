@@ -8,6 +8,10 @@ A comprehensive framework for Model Predictive Control (MPC) of various robotic 
 |--------------------------------------------|-------------------------------------|-------------------------------------------------------------|
 | ![Unitree G1 walking demo](doc/gifs/g1.gif) | ![Unitree G1 perceptive NMPC demo](doc/gifs/g1_perceptive.gif) | ![Unitree G1 perceptive parkour demo](doc/gifs/g1_parkour.gif) |
 
+| Unitree G1 Perceptive Parkour, full course (work in progress: 0.12 m stairs, 0.10 / 0.15 / 0.20 m gaps, then falls on the stepping stones at x = 10.5 m) |
+|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ![Unitree G1 parkour full course attempt](doc/gifs/g1_parkour_full.gif) |
+
 | ANYmal C | Unitree Go1 | Unitree Go2 |
 |----------|-------------|-------------|
 | ![ANYmal C demo](doc/gifs/anymal.gif) | ![Unitree Go1 demo](doc/gifs/go1.gif) | ![Unitree Go2 demo](doc/gifs/go2.gif) |

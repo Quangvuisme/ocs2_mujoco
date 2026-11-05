@@ -117,6 +117,11 @@ Timing on a 4-core cloud VM, one run at a time: MPC 7.5 ms on average (20 ms max
 *Ramp (12 deg), two 0.10 m hurdles and a 0.15 m step up and down, `task_parkour.info`, 0.25 m/s, 3x speed
 (`generate_parkour.py --sections ramp,hurdles,bigstep`). Completed without a fall.*
 
+![G1 parkour, full course attempt](../../doc/gifs/g1_parkour_full.gif)
+
+*Full course (`scene_parkour.xml`), 0.25 m/s, 3x speed: 0.12 m stairs up and down and the 0.10 / 0.15 / 0.20 m gaps,
+then a fall on the stepping stones at x = 10.5 m (the furthest of all full-course runs so far).*
+
 `scripts/generate_parkour.py` builds a harder course on top of a pit floor 0.5 m below the start level
 (`robots/g1/scene_parkour.xml`, goal x = 21.37 m; `--level hard` writes a harder variant with 0.15 m stairs,
 0.20 - 0.30 m gaps, an 18 deg ramp, 0.15 m hurdles and a 0.20 m step). Sections: 0.12 m stairs, gaps of 0.10 / 0.15 /

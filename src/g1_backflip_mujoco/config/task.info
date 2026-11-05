@@ -1,0 +1,317 @@
+; =====================================================================================================
+; g1_backflip_mujoco: standing backflip of the 29-DoF Unitree G1 with the whole-body NMPC of wb_humanoid_mpc
+; (https://github.com/manumerous/wb_humanoid_mpc, git submodule src/wb_humanoid_mpc).
+;
+; The blocks model_settings, swing_trajectory_config, contacts, jointLimits, collision_constraint follow
+; robot_models/unitree_g1/g1_wb_mpc/config/mpc/task.info of wb_humanoid_mpc.
+;
+; MPC joints (the 6 wrist joints are fixed, as upstream), order of every 23-value list:
+;   left leg  : hip_pitch hip_roll hip_yaw knee ankle_pitch ankle_roll
+;   right leg : hip_pitch hip_roll hip_yaw knee ankle_pitch ankle_roll
+;   waist     : yaw roll pitch
+;   left arm  : shoulder_pitch shoulder_roll shoulder_yaw elbow
+;   right arm : shoulder_pitch shoulder_roll shoulder_yaw elbow
+; State (58): [base position (3), base ZYX Euler (3), joints (23), base linear velocity (3), Euler rates (3),
+;              joint velocities (23)]
+;   The base is the URDF root "flip_base" (pelvis turned +90 deg about z): Euler = (pi/2 + robot yaw, robot roll,
+;   robot pitch), so the 360 deg backflip pitch is the last Euler angle and never singular.
+; Input (35): [left foot wrench (6), right foot wrench (6), joint accelerations (23)]
+; =====================================================================================================
+
+interface
+{
+  verbose                               false
+}
+
+model_settings
+{
+  robotName                      g1_backflip
+
+  foot_constraint
+  {
+    positionErrorGain_z               100.0
+    orientationErrorGain              80.0
+    linearVelocityErrorGain_z         10.0
+    linearVelocityErrorGain_xy        20.0
+    angularVelocityErrorGain          20.0
+    linearAccelerationErrorGain_z     1.0
+    linearAccelerationErrorGain_xy    1.0
+    angularAccelerationErrorGain      1.0
+  }
+
+  phaseTransitionStanceTime         0.0
+
+  verboseCppAd                  true
+  recompileLibrariesCppAd       false  ; false: reuse the generated libraries if they exist (generation takes minutes)
+  modelFolderCppAd              /tmp/g1_backflip_mujoco_cppad   ; overrides upstream's ./cppad_code_gen
+
+  fixedJointNames
+  {
+    [0] "left_wrist_roll_joint"
+    [1] "left_wrist_pitch_joint"
+    [2] "left_wrist_yaw_joint"
+    [3] "right_wrist_roll_joint"
+    [4] "right_wrist_pitch_joint"
+    [5] "right_wrist_yaw_joint"
+  }
+
+  contactNames6DoF
+  {
+    [0] "foot_l_contact"
+    [1] "foot_r_contact"
+  }
+
+  contactParentJointNames
+  {
+    [0] "left_ankle_roll_joint"
+    [1] "right_ankle_roll_joint"
+  }
+
+  armJointNames {
+    left_shoulder_y       left_shoulder_pitch_joint
+    right_shoulder_y      right_shoulder_pitch_joint
+    left_elbow_y          left_elbow_joint
+    right_elbow_y         right_elbow_joint
+  }
+}
+
+swing_trajectory_config  ; needed by the upstream pre-computation; the backflip uses no swing-foot constraints
+{
+  liftOffVelocity                         0.05
+  touchDownVelocity                      -0.0
+  swingHeight                             0.08
+  touchDownHeightOffset                  -0.001
+  swingTimeScale                          0.4
+  impactProximityFactorLiftOffVelocity    -0.15
+  impactProximityFactorTouchDownVelocity  0.3
+  impactProximityFactorMidPointValue      0.005
+}
+
+contacts
+{
+  contact_frame_translation
+  {
+   x  0.035
+   y  0.0
+   z  -0.035
+  }
+  contact_rectangle
+  {
+    x_max           0.09
+    x_min          -0.09
+    y_max           0.03
+    y_min          -0.03
+  }
+  frictionForceConeSoftConstraint
+  {
+    frictionCoefficient    0.6
+    mu                     0.2
+    delta                  5.0
+  }
+  contactMomentXYSoftConstraint
+  {
+    mu                     0.6
+    delta                  0.03
+  }
+}
+
+jointLimits
+{
+    mu                     1200.0
+    delta                  0.1
+}
+
+collision_constraint
+{
+  foot {
+    leftAnkleFrame               left_ankle_roll_joint
+    rightAnkleFrame              right_ankle_roll_joint
+    footCollisionSphereRadius    0.05
+  }
+  knee {
+    leftKneeFrame                left_knee_joint
+    rightKneeFrame               right_knee_joint
+    kneeCollisionSphereRadius    0.075
+  }
+  mu                     1500
+  delta                  0.04
+}
+
+torqueLimits  ; joint torque limits (URDF effort limits x scale) as a relaxed-barrier soft constraint
+{
+  enable                 true
+  scale                  0.85
+  mu                     50.0
+  delta                  5.0     ; [Nm]
+}
+
+footClearance  ; a foot in the air stays above the floor: contact frame z >= minHeight (relaxed barrier)
+{
+  minHeight              0.0     ; [m]
+  mu                     5.0
+  delta                  0.01    ; [m]
+}
+
+pelvisHeight  ; the pelvis stays above minHeight (relaxed barrier): no full squat
+{
+  minHeight              0.38    ; [m]
+  mu                     5.0
+  delta                  0.02    ; [m]
+}
+
+kneeClearance  ; the knee joints stay above the floor: z >= minHeight (relaxed barrier, always active)
+{
+  minHeight              0.10    ; [m] knee joint origin (the knee link is ~5 cm thick)
+  mu                     5.0
+  delta                  0.02    ; [m]
+}
+
+rollout
+{
+  AbsTolODE                       1e-5
+  RelTolODE                       1e-3
+  timeStep                        0.005
+  integratorType                  RK4
+  maxNumStepsPerSecond            10000
+  checkNumericalStability         false
+}
+
+; ---- joint postures of the guide (23 MPC joints) -------------------------------------------------------
+postures
+{
+  ;        |--------- left leg ---------| |--------- right leg --------| |-waist-|  |-- left arm --|  |-- right arm --|
+  stand  "-0.30 0 0 0.60 -0.30 0          -0.30 0 0 0.60 -0.30 0          0 0 0      0.2  0.25 0 1.0    0.2 -0.25 0 1.0"
+  crouch "-1.30 0 0 1.90 -0.80 0          -1.30 0 0 1.90 -0.80 0          0 0 0      0.9  0.25 0 1.2    0.9 -0.25 0 1.2"
+  launch " 0.05 0 0 0.45  0.15 0           0.05 0 0 0.45  0.15 0          0 0 0     -2.6  0.25 0 1.2   -2.6 -0.25 0 1.2"
+  tuck   "-2.40 0 0 2.60 -0.30 0          -2.40 0 0 2.60 -0.30 0          0 0 0.4   -0.5  0.25 0 0.5   -0.5 -0.25 0 0.5"
+  land   "-0.70 0 0 1.20 -0.78 0          -0.70 0 0 1.20 -0.78 0          0 0 0     -0.8  0.25 0 1.0   -0.8 -0.25 0 1.0"
+  absorb "-1.00 0 0 1.60 -0.75 0          -1.00 0 0 1.60 -0.75 0          0 0 0     -0.4  0.25 0 1.0   -0.4 -0.25 0 1.0"
+}
+
+; ---- guide (hand-designed, the offline plan tracks it) ---------------------------------------------------
+; keyframes: "time posture pitch [pelvis_x pelvis_z]"; pitch = robot pitch (0 upright, negative = backwards,
+; -6.283 after the flip). On the ground the pelvis follows from the posture with the feet flat on the footprint;
+; in the air (liftoffTime < time < touchdownTime) the pelvis x / z are given.
+; The touchdown keyframe over-rotates (-6.7): a rotation margin, the robot in MuJoCo leaves the ground with less spin
+; than planned (it lands under-rotated in a deep crouch and the NMPC stands it up).
+guide
+{
+  liftoffTime                   1.10
+  touchdownTime                 1.70
+  landingOffsetX               -0.25   ; [m] landing footprint behind the take-off footprint
+  keyframes
+  {
+    [0]  "0.00  stand    0.000"
+    [1]  "0.30  stand    0.000"
+    [2]  "0.75  crouch   0.200"
+    [3]  "1.10  launch  -0.350"
+    [4]  "1.25  tuck    -2.100   -0.12  1.14"
+    [5]  "1.48  tuck    -5.300   -0.20  1.08"
+    [6]  "1.70  land    -6.700"
+    [7]  "2.00  absorb  -6.400"
+    [8]  "2.60  stand   -6.283"
+    [9]  "3.00  stand   -6.283"
+  }
+}
+
+; ---- weights (state 58, input 35) ---------------------------------------------------------------------------
+; Q: basePose "x y z yaw roll pitch" (robot roll / pitch), joints (23), baseVelocity (6), jointVelocities (23)
+; R: wrench "fx fy fz mx my mz" (both feet), jointAccelerations (23)
+weights
+{
+  basePose           "20 300 300 300 300 200"
+  joints             "3 10 10 3 3 5   3 10 10 3 3 5   200 200 50   1 5 5 1   1 5 5 1"
+  baseVelocity       "1 1 1 1 1 1"
+  jointVelocities    "0.005 0.02 0.02 0.005 0.005 0.02   0.005 0.02 0.02 0.005 0.005 0.02   0.1 0.1 0.05   0.02 0.02 0.02 0.02   0.02 0.02 0.02 0.02"
+  wrench             "3e-6 3e-6 1e-6 1e-5 1e-5 1e-4"
+  jointAccelerations "5e-6 2e-5 2e-5 5e-6 5e-6 2e-5   5e-6 2e-5 2e-5 5e-6 5e-6 2e-5   1e-3 1e-3 2e-4   2e-5 5e-5 5e-5 2e-5   2e-5 5e-5 5e-5 2e-5"
+  liftoffForceWeight  1e4     ; plan: wrench weights x this at lift-off (the contact forces fade out, no impulse at the switch)
+  liftoffRampTime     0.12    ; [s]
+  symmetry            200.0   ; left / right joint symmetry (mirrored pairs, positions and velocities)
+  finalWeightScale    1.0     ; terminal weights = this x Q (at the end of every receding horizon)
+}
+
+; ---- offline plan (SQP) ------------------------------------------------------------------------------
+plan
+{
+  iterations                      200    ; SQP iterations over the whole manoeuvre (initialised with the guide)
+  flightBaseScale                 1.0    ; base pose / velocity weights x this while both feet are in the air
+  flightJointScale                1.0    ; joint weights x this while both feet are in the air
+  multiple_shooting
+  {
+    nThreads                              4
+    dt                                    0.02
+    sqpIteration                          200   ; overridden by plan.iterations
+    deltaTol                              1e-4
+    g_max                                 1e-2
+    g_min                                 1e-6
+    inequalityConstraintMu                0.1
+    inequalityConstraintDelta             5.0
+    projectStateInputEqualityConstraints  true
+    printSolverStatistics                 false
+    printSolverStatus                     false
+    printLinesearch                       false
+    useFeedbackPolicy                     false
+    integratorType                        RK4
+    threadPriority                        50
+  }
+  mpc  ; not used by the plan (loaded by the interface)
+  {
+    timeHorizon                     1.0
+    solutionTimeWindow              -1
+    coldStart                       false
+    debugPrint                      false
+    mpcDesiredFrequency             -1
+    mrtDesiredFrequency             -1
+  }
+}
+
+; ---- NMPC in MuJoCo (tracks the plan) ---------------------------------------------------------------------
+online
+{
+  liftoffForceWeight              1.0    ; no fade online: the MPC tracks the plan's (already faded) contact forces
+  baseVelocityScale               20.0   ; base velocity weights x this: follow the plan's momentum build-up
+  inputScale                      100.0  ; input weights x this: track the plan's contact forces / joint accelerations
+  flightBaseScale                 0.05   ; in the air: the plan has a rotation margin, follow its limb motion (tuck,
+  flightJointScale                20.0   ; then open the legs for the landing) rather than its pitch on the way
+  multiple_shooting
+  {
+    nThreads                              4
+    dt                                    0.02
+    sqpIteration                          3
+    deltaTol                              1e-4
+    g_max                                 1e-2
+    g_min                                 1e-6
+    inequalityConstraintMu                0.1
+    inequalityConstraintDelta             5.0
+    projectStateInputEqualityConstraints  true
+    printSolverStatistics                 false
+    printSolverStatus                     false
+    printLinesearch                       false
+    useFeedbackPolicy                     false
+    integratorType                        RK4
+    threadPriority                        50
+  }
+  mpc
+  {
+    timeHorizon                     1.4
+    solutionTimeWindow              -1
+    coldStart                       false
+    debugPrint                      false
+    mpcDesiredFrequency             100
+    mrtDesiredFrequency             1000
+  }
+}
+
+; ---- joint control in MuJoCo ------------------------------------------------------------------------------
+controller
+{
+  holdKp                        300.0  ; [Nm/rad] posture hold before the MPC starts
+  holdKd                        8.0
+  ;          |------ left leg ------| |------ right leg -----| |-waist-| |- left arm -| |- right arm -|
+  jointKp   "150 150 100 150 60 40    150 150 100 150 60 40    150 80 80   40 40 30 30    40 40 30 30"
+  jointKd   "4 4 3 5 2 2              4 4 3 5 2 2              4 3 3       1.5 1.5 1 1    1.5 1.5 1 1"
+  wristKp                       20.0   ; wrists (not in the MPC): PD to zero
+  wristKd                       0.5
+  touchdownWindow               0.12   ; [s] the MPC touchdown follows the measured one within this of the plan
+}

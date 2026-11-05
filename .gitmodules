@@ -1,0 +1,3 @@
+[submodule "src/wb_humanoid_mpc"]
+	path = src/wb_humanoid_mpc
+	url = https://github.com/manumerous/wb_humanoid_mpc.git

@@ -20,11 +20,23 @@ A comprehensive framework for Model Predictive Control (MPC) of various robotic 
 |--------------------------------------------|------------------------------------------------------------------------|
 | ![Unitree G1 walking demo](doc/gifs/g1.gif) | ![Unitree G1 perceptive NMPC demo](doc/gifs/g1_perceptive.gif) |
 
+| Unitree G1 29 DoF backflip (whole-body NMPC of wb_humanoid_mpc, no ROS) |
+|--------------------------------------------------------------------------|
+| ![Unitree G1 backflip demo](doc/gifs/g1_backflip.gif) |
+
 ## 1. Summary
 
 This project provides a complete framework for optimal control of legged robots and aerial vehicles using Model Predictive Control (MPC). It integrates OCS2's powerful optimization algorithms with MuJoCo's high-fidelity physics simulation, enabling real-time control of complex robotic systems.
 
 ### What's New (2026.11)
+
+**Standing backflip of the 29-DoF Unitree G1 (`g1_backflip_mujoco`)**
+- Built on the whole-body NMPC of [wb_humanoid_mpc](https://github.com/manumerous/wb_humanoid_mpc) (git submodule
+  `src/wb_humanoid_mpc`): its OCS2 fork (SQP + HPIPM) and humanoid MPC compiled with plain CMake, without ROS
+- Offline SQP plan over the whole manoeuvre from a keyframe guide (torque limits, friction, CoP, feet / knees above
+  the floor), then the SQP NMPC tracks it in MuJoCo; a `flip_base` root frame avoids the Euler singularity
+- Fixes a floating-base mass-matrix bug in wb_humanoid_mpc's whole-body dynamics (momentum was not conserved in flight)
+- Lands and stands up in all scripted runs (different start times, pushes); lock-step, not real time
 
 **Perceptive NMPC for the Unitree G1 humanoid (`g1_perceptive_mujoco`)**
 - The ANYmal perception stack (elevation map ray cast from MuJoCo, footholds, swing / shin clearance) on the G1 biped

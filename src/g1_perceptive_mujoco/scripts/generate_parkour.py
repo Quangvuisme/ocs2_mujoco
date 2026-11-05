@@ -124,11 +124,13 @@ LEVELS = {
 }
 
 
-def build(sections, level="normal"):
+def build(sections, level="normal", overrides=None):
     c = Course()
     c.box("start", -1.5, START_END, 0.0, rgba="0.40 0.45 0.50 1")
     for k, s in enumerate(sections):
-        getattr(c, s)(**LEVELS[level].get(s, {}))
+        params = dict(LEVELS[level].get(s, {}))
+        params.update((overrides or {}).get(s, {}))
+        getattr(c, s)(**params)
         c.flat(f"rest_{k}", 0.8)
     goal = c.x - 0.6
     c.flat("finish", 2.0)
@@ -141,10 +143,18 @@ def main():
     p.add_argument("--sections", default=",".join(SECTIONS))
     p.add_argument("-o", "--output", default=os.path.join(here, "..", "robots", "g1", "scene_parkour.xml"))
     p.add_argument("--level", default="normal", choices=sorted(LEVELS))
+    p.add_argument("--param", action="append", default=[],
+                   help="override a section parameter, e.g. --param stones.length=0.4 --param gaps.widths=0.1,0.2")
     p.add_argument("--list", action="store_true")
     args = p.parse_args()
     sections = [s for s in args.sections.split(",") if s]
-    c, goal = build(sections, args.level)
+    overrides = {}
+    for item in args.param:
+        key, value = item.split("=", 1)
+        section, name = key.split(".", 1)
+        values = tuple(float(v) for v in value.split(","))
+        overrides.setdefault(section, {})[name] = values if len(values) > 1 else (int(values[0]) if name in ("n", "rows") else values[0])
+    c, goal = build(sections, args.level, overrides)
     if args.list:
         print(f"sections: {', '.join(sections)}  goal x: {goal:.2f}")
         return

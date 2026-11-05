@@ -116,7 +116,7 @@ Timing on a 4-core cloud VM, one run at a time: MPC 7.5 ms on average (20 ms max
 (`robots/g1/scene_parkour.xml`, goal x = 21.37 m; `--level hard` writes a harder variant with 0.15 m stairs,
 0.20 - 0.30 m gaps, an 18 deg ramp, 0.15 m hurdles and a 0.20 m step). Sections: 0.12 m stairs, gaps of 0.10 / 0.15 /
 0.20 m, stepping stones, a 12 deg ramp, 0.10 m hurdles, a 0.15 m step. `--sections a,b -o file.xml` writes single
-sections for testing.
+sections for testing, `--param section.key=value` overrides a dimension (e.g. `--param stones.length=0.4`).
 
 ```bash
 build/g1_perceptive/g1_perceptive_mujoco src/g1_perceptive_mujoco/robots/g1/scene_parkour.xml \
@@ -130,6 +130,7 @@ build/g1_perceptive/g1_perceptive_mujoco src/g1_perceptive_mujoco/robots/g1/scen
 | `elevation_mapper.processing.gapFillRadius` | Morphological closing of the smooth layer: narrow pits do not pull the pelvis reference and the leg posture down |
 | `foothold.maxStepHeight` | Rejects footholds far above / below the foot's previous stance (pit floors) |
 | `foothold.expandedSearchFactor` | Second, wider search when the nominal sole is over a gap wider than the search radius |
+| `foothold.minLateralOffset` | Each sole stays on its own side of the pelvis line (no crossed legs); off by default, did not improve the full course (0/5 runs) |
 | `swing_trajectory_config.stepDownApexPhase` | Apex later in the swing when stepping down, so the heel does not drop onto the nose it leaves |
 | `perception.clearanceGradientScale` | Scale of the sideways map gradient in the clearance constraints (1: as before) |
 
@@ -137,8 +138,9 @@ build/g1_perceptive/g1_perceptive_mujoco src/g1_perceptive_mujoco/robots/g1/scen
 positions the MPC predicts 0.2 s ahead, joint angles and torques.
 
 Per-section results with `task_parkour.info` (3 speeds x 3 lateral offsets, 9 runs each, normal level): gaps 9/9,
-stairs 7/9, single 0.15 m step 6/9; ramp, hurdles and stepping stones pass at 0.25 m/s. The full course is not yet
-reliable. Step-downs are the weak spot: the hip / knee torques saturate and the swing foot lands short, both effects of
+stairs 7/9, single 0.15 m step 6/9, stepping stones 3/9; with smaller sizes: 0.10 m stairs 9/9, 0.12 m step 8/9,
+12 deg ramp 8/9, 0.10 m hurdles 6/9, 0.40 m long stones 2/9. **The full course has not been completed**: 0 of 11
+runs in a 5-minute loop (0.2 - 0.3 m/s, offsets up to 0.1 m); they fall on the 0.12 m stairs down or on the stones. Step-downs are the weak spot: the hip / knee torques saturate and the swing foot lands short, both effects of
 the single-rigid-body model (the G1 legs are 45 % of the mass) and of the RNEA + PD whole-body control.
 
 ## Notes and limitations

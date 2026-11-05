@@ -89,7 +89,9 @@ Foothold FootholdPlanner::select(size_t leg, double stanceStartTime, const Eigen
 
 std::vector<Foothold> FootholdPlanner::selectFoot(size_t foot, double stanceStartTime, const Eigen::Vector2d& nominalCenter,
                                                   const std::vector<Eigen::Vector2d>& supportOffsets, const TerrainMap& map,
-                                                  const Eigen::Vector2d& heading, double previousHeight) {
+                                                  const Eigen::Vector2d& heading, double previousHeight,
+                                                  const Eigen::Vector2d& pelvis, double side) {
+  const Eigen::Vector2d left(-heading.y(), heading.x());  // lateral direction (left) of the heading
   const Key k = key(foot, stanceStartTime);
   const auto prevIt = previous_.find(k);
   const bool hasPrevious = prevIt != previous_.end();
@@ -129,6 +131,9 @@ std::vector<Foothold> FootholdPlanner::selectFoot(size_t foot, double stanceStar
         const double d2 = (c - nominalCenter).squaredNorm();
         if (d2 > searchRadius2) {
           continue;
+        }
+        if (side != 0.0 && side * (c - pelvis).dot(left) < config_.minLateralOffset) {
+          continue;  // would cross the other leg
         }
         double pointEdge = std::numeric_limits<double>::infinity();
         for (const auto& offset : supportOffsets) {
@@ -225,6 +230,7 @@ FootholdPlannerConfig loadFootholdPlannerConfig(const std::string& file, const s
   ocs2::loadData::loadPtreeValue(pt, c.forwardWeight, p + "forwardWeight", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.maxStepHeight, p + "maxStepHeight", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.expandedSearchFactor, p + "expandedSearchFactor", verbose);
+  ocs2::loadData::loadPtreeValue(pt, c.minLateralOffset, p + "minLateralOffset", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.regionInset, p + "regionInset", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.regionMinRadius, p + "regionMinRadius", verbose);
   ocs2::loadData::loadPtreeValue(pt, c.regionMaxRadius, p + "regionMaxRadius", verbose);

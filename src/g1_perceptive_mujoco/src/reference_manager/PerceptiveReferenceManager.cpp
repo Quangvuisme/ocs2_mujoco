@@ -290,8 +290,10 @@ void PerceptiveReferenceManager::planFootholds(ocs2::scalar_t initTime, ocs2::sc
         const Eigen::Vector2d heelXY = nominalFootXY(heel, desired) + feedback;
         const Eigen::Vector2d centre = 0.5 * (toeXY + heelXY);
         const Eigen::Vector2d heading(std::cos(desired(9)), std::sin(desired(9)));
+        const double side = foot == 0 ? 1.0 : -1.0;  // foot 0: left, foot 1: right
         const auto selected = footholdPlanner_.selectFoot(foot, startTime, centre, {toeXY - centre, heelXY - centre},
-                                                          *terrain_, heading, previousHeight);
+                                                          *terrain_, heading, previousHeight,
+                                                          Eigen::Vector2d(desired(6), desired(7)), side);
         toeFoothold = selected[0];
         heelFoothold = selected[1];
       }
